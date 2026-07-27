@@ -1,3 +1,131 @@
+export const RULES = [
+  { key: "RULE-001", name: "大额交易阈值", type: "AMOUNT_THRESHOLD", severity: "HIGH", active: true },
+  { key: "RULE-002", name: "短时间高频交易", type: "VELOCITY", severity: "MEDIUM", active: true },
+  { key: "RULE-003", name: "新收款方交易", type: "NEW_PAYEE", severity: "LOW", active: true },
+  { key: "RULE-004", name: "跨境大额转账", type: "AMOUNT_THRESHOLD", severity: "HIGH", active: true },
+];
+
+export const RULE_NAME_BY_ID = Object.fromEntries(RULES.map((r) => [r.key, r.name]));
+
+export const SEVERITY_OPTIONS = [
+  { label: "HIGH", value: "HIGH" },
+  { label: "MEDIUM", value: "MEDIUM" },
+  { label: "LOW", value: "LOW" },
+];
+export const SEVERITY_COLOR = { HIGH: "red", MEDIUM: "gold", LOW: "blue" };
+
+export const ALERT_STATUS_OPTIONS = [
+  { label: "OPEN", value: "OPEN" },
+  { label: "ACKNOWLEDGED", value: "ACKNOWLEDGED" },
+  { label: "INVESTIGATING", value: "INVESTIGATING" },
+  { label: "CLOSED", value: "CLOSED" },
+  { label: "DISMISSED", value: "DISMISSED" },
+];
+export const ALERT_STATUS_COLOR = {
+  OPEN: "red",
+  ACKNOWLEDGED: "gold",
+  INVESTIGATING: "blue",
+  CLOSED: "green",
+  DISMISSED: "default",
+};
+
+// today's date used for the "Alerts today" summary card
+export const TODAY = "2026-07-27";
+
+export const ALERTS = [
+  {
+    key: "ALT-5001",
+    ruleId: "RULE-001",
+    severity: "HIGH",
+    status: "OPEN",
+    createdAt: "2026-07-27 09:15:00",
+    acknowledgedAt: null,
+    acknowledgedBy: null,
+    closedAt: null,
+    closedBy: null,
+    resolutionNotes: null,
+    transactionIds: ["TXN-100234"],
+  },
+  {
+    key: "ALT-5002",
+    ruleId: "RULE-002",
+    severity: "MEDIUM",
+    status: "ACKNOWLEDGED",
+    createdAt: "2026-07-27 08:40:00",
+    acknowledgedAt: "2026-07-27 08:50:00",
+    acknowledgedBy: "ivy.chen",
+    closedAt: null,
+    closedBy: null,
+    resolutionNotes: null,
+    transactionIds: ["TXN-100233", "TXN-100231"],
+  },
+  {
+    key: "ALT-5003",
+    ruleId: "RULE-003",
+    severity: "LOW",
+    status: "INVESTIGATING",
+    createdAt: "2026-07-26 17:22:00",
+    acknowledgedAt: "2026-07-26 17:30:00",
+    acknowledgedBy: "marcus.li",
+    closedAt: null,
+    closedBy: null,
+    resolutionNotes: null,
+    transactionIds: ["TXN-100232"],
+  },
+  {
+    key: "ALT-5004",
+    ruleId: "RULE-001",
+    severity: "HIGH",
+    status: "CLOSED",
+    createdAt: "2026-07-25 15:05:00",
+    acknowledgedAt: "2026-07-25 15:20:00",
+    acknowledgedBy: "ivy.chen",
+    closedAt: "2026-07-25 17:05:00",
+    closedBy: "ivy.chen",
+    resolutionNotes: "客户确认为合法大额采购付款,已提供合同凭证。",
+    transactionIds: ["TXN-100230"],
+  },
+  {
+    key: "ALT-5005",
+    ruleId: "RULE-004",
+    severity: "HIGH",
+    status: "DISMISSED",
+    createdAt: "2026-07-24 11:12:00",
+    acknowledgedAt: "2026-07-24 11:20:00",
+    acknowledgedBy: "marcus.li",
+    closedAt: "2026-07-24 11:40:00",
+    closedBy: "marcus.li",
+    resolutionNotes: "系统误判,交易对手方已在白名单中。",
+    transactionIds: ["TXN-100229"],
+  },
+  {
+    key: "ALT-5006",
+    ruleId: "RULE-002",
+    severity: "MEDIUM",
+    status: "OPEN",
+    createdAt: "2026-07-27 07:55:00",
+    acknowledgedAt: null,
+    acknowledgedBy: null,
+    closedAt: null,
+    closedBy: null,
+    resolutionNotes: null,
+    transactionIds: ["TXN-100227"],
+  },
+  {
+    key: "ALT-5007",
+    ruleId: "RULE-003",
+    severity: "LOW",
+    status: "DISMISSED",
+    createdAt: "2026-07-23 09:30:00",
+    acknowledgedAt: "2026-07-23 09:40:00",
+    acknowledgedBy: "ivy.chen",
+    closedAt: "2026-07-23 10:00:00",
+    closedBy: "ivy.chen",
+    resolutionNotes: "新收款方已通过人工核实,非风险交易。",
+    transactionIds: ["TXN-100228"],
+  },
+];
+
 export const TRANSACTION_STATUS_LABEL = {
   completed: "completed",
   pending: "pending",
