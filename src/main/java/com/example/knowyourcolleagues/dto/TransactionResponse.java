@@ -18,7 +18,10 @@ public class TransactionResponse {
     @Schema(description = "交易主键", example = "1")
     private Long id;
 
-    @Schema(description = "交易业务参考号", example = "TXN-20260727-0001")
+    @Schema(
+            description = "后端生成的唯一交易号",
+            example = "TXN-20260727143000123-A1B2C3D4E5F60718293A"
+    )
     private String transactionRef;
 
     @Schema(description = "账户编号", example = "ACC-001")

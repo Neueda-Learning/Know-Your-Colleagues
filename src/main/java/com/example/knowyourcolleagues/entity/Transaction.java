@@ -24,7 +24,7 @@ public class Transaction {
     private Long id;
 
     /**
-     * 交易业务参考号，用于外部查询和避免重复提交。
+     * 后端生成的唯一交易号，包含 UTC 时间和随机部分。
      */
     private String transactionRef;
 

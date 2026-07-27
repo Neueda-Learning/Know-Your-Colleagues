@@ -2,9 +2,9 @@ package com.example.knowyourcolleagues.transaction.service;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.example.knowyourcolleagues.bizexception.transaction.DuplicateTransactionReferenceException;
 import com.example.knowyourcolleagues.bizexception.transaction.InvalidTransactionRequestException;
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
+import com.example.knowyourcolleagues.bizexception.transaction.TransactionReferenceGenerationException;
 import com.example.knowyourcolleagues.dto.CreateTransactionRequest;
 import com.example.knowyourcolleagues.dto.TransactionPageResponse;
 import com.example.knowyourcolleagues.dto.TransactionQueryRequest;
@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -28,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -46,7 +48,6 @@ class TransactionServiceImplTest {
 
     @Test
     void shouldCreateTransactionWithNormalizedDefaults() {
-        when(transactionMapper.selectOne(any(Wrapper.class))).thenReturn(null);
         when(transactionMapper.insert(any(Transaction.class)))
                 .thenAnswer(invocation -> {
                     Transaction transaction = invocation.getArgument(0);
@@ -67,6 +68,8 @@ class TransactionServiceImplTest {
         verify(transactionMapper).insert(transactionCaptor.capture());
 
         Transaction inserted = transactionCaptor.getValue();
+        assertThat(inserted.getTransactionRef())
+                .matches("TXN-\\d{17}-[A-F0-9]{20}");
         assertThat(inserted.getCurrency()).isEqualTo("USD");
         assertThat(inserted.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
         assertThat(inserted.getTransactionTime()).isNotNull();
@@ -75,16 +78,37 @@ class TransactionServiceImplTest {
     }
 
     @Test
-    void shouldRejectDuplicateTransactionReference() {
-        when(transactionMapper.selectOne(any(Wrapper.class)))
-                .thenReturn(transaction(1001L));
+    void shouldRetryWhenGeneratedTransactionReferenceCollides() {
+        when(transactionMapper.insert(any(Transaction.class)))
+                .thenThrow(new DuplicateKeyException("collision"))
+                .thenThrow(new DuplicateKeyException("collision"))
+                .thenAnswer(invocation -> {
+                    Transaction transaction = invocation.getArgument(0);
+                    transaction.setId(1001L);
+                    return 1;
+                });
+
+        TransactionResponse response = transactionService.createTransaction(
+                validCreateRequest()
+        );
+
+        verify(transactionMapper, times(3)).insert(any(Transaction.class));
+        assertThat(response.getId()).isEqualTo(1001L);
+        assertThat(response.getTransactionRef())
+                .matches("TXN-\\d{17}-[A-F0-9]{20}");
+    }
+
+    @Test
+    void shouldFailAfterThreeTransactionReferenceCollisions() {
+        when(transactionMapper.insert(any(Transaction.class)))
+                .thenThrow(new DuplicateKeyException("collision"));
 
         assertThatThrownBy(() -> transactionService.createTransaction(
                 validCreateRequest()
-        )).isInstanceOf(DuplicateTransactionReferenceException.class)
-                .hasMessageContaining("TXN-001");
+        )).isInstanceOf(TransactionReferenceGenerationException.class)
+                .hasMessageContaining("3 attempts");
 
-        verify(transactionMapper, never()).insert(any(Transaction.class));
+        verify(transactionMapper, times(3)).insert(any(Transaction.class));
     }
 
     @Test
@@ -156,7 +180,6 @@ class TransactionServiceImplTest {
 
     private CreateTransactionRequest validCreateRequest() {
         CreateTransactionRequest request = new CreateTransactionRequest();
-        request.setTransactionRef("TXN-001");
         request.setAccountId("ACC-001");
         request.setPayeeId("PAYEE-001");
         request.setAmount(new BigDecimal("15000.00"));
@@ -174,7 +197,9 @@ class TransactionServiceImplTest {
         LocalDateTime now = LocalDateTime.parse("2026-07-27T14:30:00");
         Transaction transaction = new Transaction();
         transaction.setId(id);
-        transaction.setTransactionRef("TXN-001");
+        transaction.setTransactionRef(
+                "TXN-20260727143000000-A1B2C3D4E5F60718293A"
+        );
         transaction.setAccountId("ACC-001");
         transaction.setPayeeId("PAYEE-001");
         transaction.setAmount(new BigDecimal("15000.00"));
