@@ -7,6 +7,7 @@ import com.example.knowyourcolleagues.dto.CreateAlertCommand;
 import com.example.knowyourcolleagues.dto.UpdateAlertStatusRequest;
 import com.example.knowyourcolleagues.entity.Alert;
 import com.example.knowyourcolleagues.entity.AlertHistory;
+import com.example.knowyourcolleagues.entity.AlertTransaction;
 import com.example.knowyourcolleagues.enums.AlertStatus;
 import com.example.knowyourcolleagues.enums.Severity;
 import com.example.knowyourcolleagues.bizexception.alert.AlertNotFoundException;
@@ -14,6 +15,7 @@ import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertRequestExce
 import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertTransitionException;
 import com.example.knowyourcolleagues.mapper.AlertHistoryMapper;
 import com.example.knowyourcolleagues.mapper.AlertMapper;
+import com.example.knowyourcolleagues.mapper.AlertTransactionMapper;
 import com.example.knowyourcolleagues.service.impl.AlertServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,13 +24,14 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,12 +43,19 @@ class AlertServiceImplTest {
     @Mock
     private AlertHistoryMapper alertHistoryMapper;
 
+    @Mock
+    private AlertTransactionMapper alertTransactionMapper;
+
     private AlertServiceImpl alertService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        alertService = new AlertServiceImpl(alertMapper, alertHistoryMapper);
+        alertService = new AlertServiceImpl(
+                alertMapper,
+                alertHistoryMapper,
+                alertTransactionMapper
+        );
     }
 
     @Test
@@ -58,6 +68,8 @@ class AlertServiceImplTest {
             return 1;
         });
         when(alertHistoryMapper.insert(any(AlertHistory.class))).thenReturn(1);
+        when(alertTransactionMapper.insert(any(AlertTransaction.class)))
+                .thenReturn(1);
 
         AlertResponse response = alertService.createAlert(command);
 
@@ -67,6 +79,8 @@ class AlertServiceImplTest {
         assertThat(response.getCreatedAt()).isNotNull();
         verify(alertMapper).insert(any(Alert.class));
         verify(alertHistoryMapper).insert(any(AlertHistory.class));
+        verify(alertTransactionMapper, times(2))
+                .insert(any(AlertTransaction.class));
     }
 
     @Test
@@ -79,6 +93,8 @@ class AlertServiceImplTest {
         assertThat(response.getId()).isEqualTo(existing.getId());
         verify(alertMapper, never()).insert(any(Alert.class));
         verify(alertHistoryMapper, never()).insert(any(AlertHistory.class));
+        verify(alertTransactionMapper, never())
+                .insert(any(AlertTransaction.class));
     }
 
     @Test
@@ -88,6 +104,8 @@ class AlertServiceImplTest {
         when(alertMapper.updateById(alert)).thenReturn(1);
         when(alertHistoryMapper.insert(any(AlertHistory.class))).thenReturn(1);
         when(alertHistoryMapper.selectList(any(Wrapper.class)))
+                .thenReturn(List.of());
+        when(alertTransactionMapper.selectList(any(Wrapper.class)))
                 .thenReturn(List.of());
 
         UpdateAlertStatusRequest request = new UpdateAlertStatusRequest();
@@ -155,11 +173,12 @@ class AlertServiceImplTest {
         command.setSeverity(Severity.HIGH);
         command.setTitle("Large transaction detected");
         command.setDescription("Amount exceeded configured threshold");
+        command.setRelatedTransactionIds(List.of(5001L, 5002L, 5002L));
         return command;
     }
 
     private Alert openAlert() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         Alert alert = new Alert();
         alert.setId(101L);
         alert.setRuleId(1L);
