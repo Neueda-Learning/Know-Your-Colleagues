@@ -22,11 +22,6 @@ public class CreateTransactionRequest {
 
     @NotBlank
     @Size(max = 64)
-    @Schema(description = "交易业务参考号，必须唯一", example = "TXN-20260727-0001")
-    private String transactionRef;
-
-    @NotBlank
-    @Size(max = 64)
     @Schema(description = "发起交易的账户编号", example = "ACC-001")
     private String accountId;
 

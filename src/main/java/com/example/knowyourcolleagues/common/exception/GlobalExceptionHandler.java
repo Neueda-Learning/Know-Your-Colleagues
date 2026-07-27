@@ -4,7 +4,6 @@ import com.example.knowyourcolleagues.bizexception.alert.AlertNotFoundException;
 import com.example.knowyourcolleagues.bizexception.alert.ConcurrentAlertUpdateException;
 import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertRequestException;
 import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertTransitionException;
-import com.example.knowyourcolleagues.bizexception.transaction.DuplicateTransactionReferenceException;
 import com.example.knowyourcolleagues.bizexception.transaction.InvalidTransactionRequestException;
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
 import com.example.knowyourcolleagues.bizexception.rule.ConcurrentRuleUpdateException;
@@ -82,14 +81,14 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler(DuplicateTransactionReferenceException.class)
-    public ResponseEntity<ErrorResponse> handleDuplicateTransactionReference(
-            DuplicateTransactionReferenceException exception,
+    @ExceptionHandler(TransactionReferenceGenerationException.class)
+    public ResponseEntity<ErrorResponse> handleTransactionReferenceGeneration(
+            TransactionReferenceGenerationException exception,
             HttpServletRequest request
     ) {
         return buildResponse(
-                HttpStatus.CONFLICT,
-                "DUPLICATE_TRANSACTION_REFERENCE",
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "TRANSACTION_REFERENCE_GENERATION_FAILED",
                 exception.getMessage(),
                 request
         );

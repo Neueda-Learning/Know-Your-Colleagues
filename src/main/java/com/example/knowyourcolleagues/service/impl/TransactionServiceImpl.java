@@ -2,9 +2,9 @@ package com.example.knowyourcolleagues.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.example.knowyourcolleagues.bizexception.transaction.DuplicateTransactionReferenceException;
 import com.example.knowyourcolleagues.bizexception.transaction.InvalidTransactionRequestException;
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
+import com.example.knowyourcolleagues.bizexception.transaction.TransactionReferenceGenerationException;
 import com.example.knowyourcolleagues.dto.CreateTransactionRequest;
 import com.example.knowyourcolleagues.dto.TransactionPageResponse;
 import com.example.knowyourcolleagues.dto.TransactionQueryRequest;
@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.UUID;
 import com.example.knowyourcolleagues.dto.TransactionRecordedEvent;
@@ -34,6 +35,10 @@ import com.example.knowyourcolleagues.dto.TransactionRecordedEvent;
 public class TransactionServiceImpl implements TransactionService {
 
     private static final long MAX_PAGE_SIZE = 100L;
+    private static final int MAX_REFERENCE_GENERATION_ATTEMPTS = 3;
+    private static final int RANDOM_REFERENCE_LENGTH = 20;
+    private static final DateTimeFormatter REFERENCE_TIME_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private final TransactionMapper transactionMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -44,14 +49,8 @@ public class TransactionServiceImpl implements TransactionService {
     public TransactionResponse createTransaction(CreateTransactionRequest request) {
         validateCreateRequest(request);
 
-        String transactionRef = request.getTransactionRef().trim();
-        if (findByTransactionRef(transactionRef) != null) {
-            throw duplicateReference(transactionRef);
-        }
-
         LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
         Transaction transaction = new Transaction();
-        transaction.setTransactionRef(transactionRef);
         transaction.setAccountId(request.getAccountId().trim());
         transaction.setPayeeId(request.getPayeeId().trim());
         transaction.setAmount(request.getAmount());
@@ -67,11 +66,7 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setCreatedAt(now);
         transaction.setUpdatedAt(now);
 
-        try {
-            transactionMapper.insert(transaction);
-        } catch (DuplicateKeyException exception) {
-            throw duplicateReference(transactionRef);
-        }
+        insertWithGeneratedReference(transaction, now);
 
         TransactionRecordedEvent event = new TransactionRecordedEvent();
         event.setEventId(UUID.randomUUID());
@@ -150,23 +145,10 @@ public class TransactionServiceImpl implements TransactionService {
         return toResponse(transaction);
     }
 
-    private Transaction findByTransactionRef(String transactionRef) {
-        return transactionMapper.selectOne(
-                new LambdaQueryWrapper<Transaction>()
-                        .eq(Transaction::getTransactionRef, transactionRef)
-                        .last("LIMIT 1")
-        );
-    }
-
     private void validateCreateRequest(CreateTransactionRequest request) {
         if (request == null) {
             throw new InvalidTransactionRequestException(
                     "transaction request is required"
-            );
-        }
-        if (!hasText(request.getTransactionRef())) {
-            throw new InvalidTransactionRequestException(
-                    "transactionRef is required"
             );
         }
         if (!hasText(request.getAccountId())) {
@@ -233,12 +215,41 @@ public class TransactionServiceImpl implements TransactionService {
         }
     }
 
-    private DuplicateTransactionReferenceException duplicateReference(
-            String transactionRef
+    private void insertWithGeneratedReference(
+            Transaction transaction,
+            LocalDateTime transactionCreationTime
     ) {
-        return new DuplicateTransactionReferenceException(
-                "Transaction reference already exists: " + transactionRef
+        DuplicateKeyException lastException = null;
+        for (int attempt = 0;
+             attempt < MAX_REFERENCE_GENERATION_ATTEMPTS;
+             attempt++) {
+            transaction.setId(null);
+            transaction.setTransactionRef(
+                    generateTransactionReference(transactionCreationTime)
+            );
+            try {
+                transactionMapper.insert(transaction);
+                return;
+            } catch (DuplicateKeyException exception) {
+                lastException = exception;
+            }
+        }
+
+        throw new TransactionReferenceGenerationException(
+                "Unable to generate a unique transaction reference after "
+                        + MAX_REFERENCE_GENERATION_ATTEMPTS + " attempts",
+                lastException
         );
+    }
+
+    private String generateTransactionReference(LocalDateTime creationTime) {
+        String timePart = creationTime.format(REFERENCE_TIME_FORMATTER);
+        String randomPart = UUID.randomUUID()
+                .toString()
+                .replace("-", "")
+                .substring(0, RANDOM_REFERENCE_LENGTH)
+                .toUpperCase(Locale.ROOT);
+        return "TXN-" + timePart + "-" + randomPart;
     }
 
     private TransactionResponse toResponse(Transaction transaction) {
