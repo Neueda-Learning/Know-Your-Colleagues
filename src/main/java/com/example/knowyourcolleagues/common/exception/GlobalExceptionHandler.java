@@ -4,6 +4,9 @@ import com.example.knowyourcolleagues.bizexception.alert.AlertNotFoundException;
 import com.example.knowyourcolleagues.bizexception.alert.ConcurrentAlertUpdateException;
 import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertRequestException;
 import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertTransitionException;
+import com.example.knowyourcolleagues.bizexception.transaction.DuplicateTransactionReferenceException;
+import com.example.knowyourcolleagues.bizexception.transaction.InvalidTransactionRequestException;
+import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +20,45 @@ import java.time.Instant;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(TransactionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTransactionNotFound(
+            TransactionNotFoundException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                HttpStatus.NOT_FOUND,
+                "TRANSACTION_NOT_FOUND",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(DuplicateTransactionReferenceException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateTransactionReference(
+            DuplicateTransactionReferenceException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_TRANSACTION_REFERENCE",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(InvalidTransactionRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidTransactionRequest(
+            InvalidTransactionRequestException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_TRANSACTION_REQUEST",
+                exception.getMessage(),
+                request
+        );
+    }
 
     @ExceptionHandler(AlertNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleAlertNotFound(
