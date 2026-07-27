@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
@@ -35,13 +36,18 @@ class TransactionServiceImplTest {
 
     @Mock
     private TransactionMapper transactionMapper;
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     private TransactionServiceImpl transactionService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        transactionService = new TransactionServiceImpl(transactionMapper);
+        transactionService = new TransactionServiceImpl(
+                transactionMapper,
+                applicationEventPublisher
+        );
     }
 
     @Test
