@@ -8,9 +8,16 @@ import lombok.Data;
 @Schema(description = "告警状态更新请求")
 public class UpdateAlertStatusRequest {
 
-    @Schema(description = "希望流转到的目标状态", example = "ACKNOWLEDGED", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "希望流转到的目标状态",
+            example = "ACKNOWLEDGED",
+            requiredMode = Schema.RequiredMode.REQUIRED
+    )
     private AlertStatus targetStatus;
 
-    @Schema(description = "状态变更说明；关闭或驳回告警时建议填写", example = "已由操作员确认")
+    @Schema(
+            description = "状态变更说明；目标状态为 CLOSED 或 DISMISSED 时必须填写",
+            example = "调查完成，交易已确认合法"
+    )
     private String notes;
 }

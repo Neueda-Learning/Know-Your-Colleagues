@@ -62,7 +62,7 @@ public class AlertController {
             @RequestParam(required = false) String accountId,
             @Parameter(description = "页码，从 0 开始", example = "0")
             @RequestParam(defaultValue = "0") long page,
-            @Parameter(description = "每页数量", example = "20")
+            @Parameter(description = "每页数量，范围为 1～100", example = "20")
             @RequestParam(defaultValue = "20") long size
     ) {
         return ResponseEntity.ok(
@@ -70,9 +70,21 @@ public class AlertController {
         );
     }
 
-    @Operation(summary = "查询告警详情", description = "根据告警 ID 返回告警详情及状态历史。")
+    @Operation(
+            summary = "查询告警详情",
+            description = "根据告警 ID 返回告警详情、关联交易 ID 以及状态历史。"
+    )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "查询成功"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "查询成功",
+                    content = @Content(schema = @Schema(implementation = AlertDetailResponse.class))
+            ),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "告警 ID 不合法",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
             @ApiResponse(
                     responseCode = "404",
                     description = "告警不存在",
@@ -81,7 +93,7 @@ public class AlertController {
     })
     @GetMapping("/{alertId}")
     public ResponseEntity<AlertDetailResponse> getAlert(
-            @Parameter(description = "告警 ID", example = "1", required = true)
+            @Parameter(description = "告警 ID，必须为正整数", example = "1", required = true)
             @PathVariable Long alertId
     ) {
         return ResponseEntity.ok(alertService.getAlert(alertId));
@@ -89,14 +101,21 @@ public class AlertController {
 
     @Operation(
             summary = "更新告警状态",
-            description = "按照 OPEN → ACKNOWLEDGED → INVESTIGATING → CLOSED 的流程更新状态，"
-                    + "也可以按业务规则将告警标记为 DISMISSED。"
+            description = "合法状态转换：OPEN → ACKNOWLEDGED/DISMISSED；"
+                    + "ACKNOWLEDGED → INVESTIGATING/DISMISSED；"
+                    + "INVESTIGATING → CLOSED/DISMISSED。"
+                    + "CLOSED 和 DISMISSED 为终态。"
+                    + "目标状态为 CLOSED 或 DISMISSED 时 notes 必填。"
     )
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "状态更新成功"),
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "状态更新成功",
+                    content = @Content(schema = @Schema(implementation = AlertDetailResponse.class))
+            ),
             @ApiResponse(
                     responseCode = "400",
-                    description = "请求参数不合法",
+                    description = "请求参数不合法，或关闭/驳回时缺少 notes",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))
             ),
             @ApiResponse(
@@ -112,10 +131,10 @@ public class AlertController {
     })
     @PatchMapping("/{alertId}/status")
     public ResponseEntity<AlertDetailResponse> updateStatus(
-            @Parameter(description = "告警 ID", example = "1", required = true)
+            @Parameter(description = "告警 ID，必须为正整数", example = "1", required = true)
             @PathVariable Long alertId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                    description = "目标状态和本次操作说明",
+                    description = "目标状态和本次操作说明；CLOSED 或 DISMISSED 时 notes 必填",
                     required = true,
                     content = @Content(
                             schema = @Schema(implementation = UpdateAlertStatusRequest.class),
@@ -129,9 +148,17 @@ public class AlertController {
         return ResponseEntity.ok(alertService.updateStatus(alertId, request));
     }
 
-    @Operation(summary = "查询告警状态历史", description = "按发生时间返回指定告警的状态变更记录。")
+    @Operation(
+            summary = "查询告警状态历史",
+            description = "按发生时间返回指定告警的状态变更记录。"
+    )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "查询成功"),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "告警 ID 不合法",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
+            ),
             @ApiResponse(
                     responseCode = "404",
                     description = "告警不存在",
@@ -140,7 +167,7 @@ public class AlertController {
     })
     @GetMapping("/{alertId}/history")
     public ResponseEntity<List<AlertHistoryResponse>> getHistory(
-            @Parameter(description = "告警 ID", example = "1", required = true)
+            @Parameter(description = "告警 ID，必须为正整数", example = "1", required = true)
             @PathVariable Long alertId
     ) {
         return ResponseEntity.ok(alertService.getHistory(alertId));
