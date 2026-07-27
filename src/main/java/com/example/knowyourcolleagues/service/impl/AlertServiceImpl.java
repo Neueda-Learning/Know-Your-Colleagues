@@ -1,6 +1,7 @@
 package com.example.knowyourcolleagues.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.knowyourcolleagues.service.AlertService;
 import com.example.knowyourcolleagues.dto.AlertDetailResponse;
 import com.example.knowyourcolleagues.dto.AlertHistoryResponse;
@@ -125,26 +126,20 @@ public class AlertServiceImpl implements AlertService {
                         hasText(accountId) ? accountId.trim() : null)
                 .orderByDesc(Alert::getCreatedAt);
 
-        List<Alert> matchingAlerts = alertMapper.selectList(query);
-        long fromIndex = Math.min(page * size, matchingAlerts.size());
-        long toIndex = Math.min(fromIndex + size, matchingAlerts.size());
-        List<Alert> pageContent = matchingAlerts.subList(
-                Math.toIntExact(fromIndex),
-                Math.toIntExact(toIndex)
+        // Controller 对外使用从 0 开始的页码，MyBatis-Plus Page 使用从 1 开始的页码。
+        Page<Alert> alertPage = alertMapper.selectPage(
+                new Page<>(page + 1, size),
+                query
         );
-        long totalElements = matchingAlerts.size();
-        long totalPages = totalElements == 0
-                ? 0
-                : (totalElements + size - 1) / size;
 
         AlertPageResponse response = new AlertPageResponse();
-        response.setContent(pageContent.stream()
+        response.setContent(alertPage.getRecords().stream()
                 .map(this::toResponse)
                 .toList());
         response.setPage(page);
         response.setSize(size);
-        response.setTotalElements(totalElements);
-        response.setTotalPages(totalPages);
+        response.setTotalElements(alertPage.getTotal());
+        response.setTotalPages(alertPage.getPages());
         return response;
     }
 
