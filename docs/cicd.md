@@ -2,6 +2,22 @@
 
 项目使用 `.github/workflows/ci-cd.yml` 同时验证 Java 后端和 React 前端。
 
+## CI/CD 开关
+
+工作流由 GitHub Actions 仓库变量 `CI_ENABLED` 控制：
+
+- 变量未创建或值不是 `true`：工作流会响应事件，但所有任务均跳过。
+- 值为 `true`：正常执行后端 CI、前端 CI，并在代码进入 `main` 后发布镜像。
+
+在 GitHub 仓库中通过以下路径管理该变量：
+
+```text
+Settings → Secrets and variables → Actions → Variables → CI_ENABLED
+```
+
+开发阶段建议设置为 `false`，准备启用流水线时改为小写的 `true`。修改变量不会
+自动触发一次运行；可以推送一个新提交，或在 Actions 页面手动运行工作流。
+
 ## 触发规则
 
 - Pull Request 到 `main`：执行后端测试、前端 lint 和前端构建。
