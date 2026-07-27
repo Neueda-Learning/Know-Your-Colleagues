@@ -6,7 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.example.knowyourcolleagues.enums.AlertStatus;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @TableName("alert_history")
@@ -19,5 +19,5 @@ public class AlertHistory {
     private AlertStatus fromStatus;
     private AlertStatus toStatus;
     private String notes;
-    private LocalDateTime changedAt;
+    private Instant changedAt;
 }
