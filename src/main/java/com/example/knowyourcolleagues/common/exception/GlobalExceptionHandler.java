@@ -6,6 +6,7 @@ import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertRequestExce
 import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertTransitionException;
 import com.example.knowyourcolleagues.bizexception.transaction.InvalidTransactionRequestException;
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
+import com.example.knowyourcolleagues.bizexception.transaction.TransactionReferenceGenerationException;
 import com.example.knowyourcolleagues.bizexception.rule.ConcurrentRuleUpdateException;
 import com.example.knowyourcolleagues.bizexception.rule.InvalidRuleRequestException;
 import com.example.knowyourcolleagues.bizexception.rule.RuleNotFoundException;
