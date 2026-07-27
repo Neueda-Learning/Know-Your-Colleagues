@@ -50,11 +50,7 @@ public class TransactionController {
                     description = "请求参数不合法",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))
             ),
-            @ApiResponse(
-                    responseCode = "409",
-                    description = "交易业务参考号已经存在",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))
-            )
+            @ApiResponse(responseCode = "500", description = "交易号生成失败")
     })
     @PostMapping
     public ResponseEntity<TransactionResponse> createTransaction(
@@ -65,7 +61,6 @@ public class TransactionController {
                             schema = @Schema(implementation = CreateTransactionRequest.class),
                             examples = @ExampleObject(value = """
                                     {
-                                      "transactionRef": "TXN-20260727-0001",
                                       "accountId": "ACC-001",
                                       "payeeId": "PAYEE-001",
                                       "amount": 15000.00,
