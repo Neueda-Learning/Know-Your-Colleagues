@@ -6,7 +6,10 @@ import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertRequestExce
 import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertTransitionException;
 import com.example.knowyourcolleagues.bizexception.transaction.InvalidTransactionRequestException;
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
-import com.example.knowyourcolleagues.bizexception.transaction.TransactionReferenceGenerationException;
+import com.example.knowyourcolleagues.bizexception.rule.ConcurrentRuleUpdateException;
+import com.example.knowyourcolleagues.bizexception.rule.InvalidRuleRequestException;
+import com.example.knowyourcolleagues.bizexception.rule.RuleNotFoundException;
+import com.example.knowyourcolleagues.bizexception.rule.UnsupportedRuleTypeException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +23,50 @@ import java.time.Instant;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(RuleNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleRuleNotFound(
+            RuleNotFoundException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                HttpStatus.NOT_FOUND,
+                "RULE_NOT_FOUND",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler({
+            ConcurrentRuleUpdateException.class
+    })
+    public ResponseEntity<ErrorResponse> handleRuleConflict(
+            RuntimeException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                HttpStatus.CONFLICT,
+                "RULE_CONCURRENT_UPDATE",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler({
+            InvalidRuleRequestException.class,
+            UnsupportedRuleTypeException.class
+    })
+    public ResponseEntity<ErrorResponse> handleInvalidRule(
+            RuntimeException exception,
+            HttpServletRequest request
+    ) {
+        return buildResponse(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_RULE_REQUEST",
+                exception.getMessage(),
+                request
+        );
+    }
 
     @ExceptionHandler(TransactionNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleTransactionNotFound(

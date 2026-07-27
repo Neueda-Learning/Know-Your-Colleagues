@@ -15,6 +15,7 @@ import com.example.knowyourcolleagues.mapper.TransactionMapper;
 import com.example.knowyourcolleagues.service.TransactionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +25,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.UUID;
+import com.example.knowyourcolleagues.dto.TransactionRecordedEvent;
 
 /**
  * 交易业务服务实现。
@@ -39,6 +41,7 @@ public class TransactionServiceImpl implements TransactionService {
             DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private final TransactionMapper transactionMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
     private final Clock clock = Clock.systemUTC();
 
     @Override
@@ -64,6 +67,12 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setUpdatedAt(now);
 
         insertWithGeneratedReference(transaction, now);
+
+        TransactionRecordedEvent event = new TransactionRecordedEvent();
+        event.setEventId(UUID.randomUUID());
+        event.setTransactionId(transaction.getId());
+        event.setOccurredAt(clock.instant());
+        applicationEventPublisher.publishEvent(event);
 
         return toResponse(transaction);
     }
