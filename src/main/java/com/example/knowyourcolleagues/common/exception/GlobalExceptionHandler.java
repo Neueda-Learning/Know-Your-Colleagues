@@ -1,9 +1,9 @@
 package com.example.knowyourcolleagues.common.exception;
 
-import com.example.knowyourcolleagues.alert.exception.AlertNotFoundException;
-import com.example.knowyourcolleagues.alert.exception.ConcurrentAlertUpdateException;
-import com.example.knowyourcolleagues.alert.exception.InvalidAlertRequestException;
-import com.example.knowyourcolleagues.alert.exception.InvalidAlertTransitionException;
+import com.example.knowyourcolleagues.bizexception.alert.AlertNotFoundException;
+import com.example.knowyourcolleagues.bizexception.alert.ConcurrentAlertUpdateException;
+import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertRequestException;
+import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertTransitionException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
