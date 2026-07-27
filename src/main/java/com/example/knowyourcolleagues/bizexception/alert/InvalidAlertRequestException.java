@@ -1,4 +1,4 @@
-package com.example.knowyourcolleagues.alert.exception;
+package com.example.knowyourcolleagues.bizexception.alert;
 
 public class InvalidAlertRequestException extends RuntimeException {
 

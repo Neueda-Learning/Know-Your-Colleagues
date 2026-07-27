@@ -1,4 +1,4 @@
-package com.example.knowyourcolleagues.alert.dto;
+package com.example.knowyourcolleagues.dto;
 
 import lombok.Data;
 

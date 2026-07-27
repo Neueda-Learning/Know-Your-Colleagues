@@ -1,4 +1,4 @@
-package com.example.knowyourcolleagues.alert.enums;
+package com.example.knowyourcolleagues.enums;
 
 public enum AlertStatus {
     OPEN,

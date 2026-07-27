@@ -1,6 +1,6 @@
-package com.example.knowyourcolleagues.alert.dto;
+package com.example.knowyourcolleagues.dto;
 
-import com.example.knowyourcolleagues.alert.enums.Severity;
+import com.example.knowyourcolleagues.enums.Severity;
 import lombok.Data;
 
 @Data

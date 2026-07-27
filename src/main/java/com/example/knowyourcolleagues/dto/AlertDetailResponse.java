@@ -1,22 +1,16 @@
-package com.example.knowyourcolleagues.alert.entity;
+package com.example.knowyourcolleagues.dto;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.annotation.Version;
-import com.example.knowyourcolleagues.alert.enums.AlertStatus;
-import com.example.knowyourcolleagues.alert.enums.Severity;
+import com.example.knowyourcolleagues.enums.AlertStatus;
+import com.example.knowyourcolleagues.enums.Severity;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
-@TableName("alerts")
-public class Alert {
+public class AlertDetailResponse {
 
-    @TableId(type = IdType.AUTO)
     private Long id;
-
     private Long ruleId;
     private Long triggerTransactionId;
     private String accountId;
@@ -32,7 +26,6 @@ public class Alert {
     private LocalDateTime closedAt;
     private LocalDateTime dismissedAt;
     private LocalDateTime updatedAt;
-
-    @Version
     private Integer version;
+    private List<AlertHistoryResponse> history;
 }

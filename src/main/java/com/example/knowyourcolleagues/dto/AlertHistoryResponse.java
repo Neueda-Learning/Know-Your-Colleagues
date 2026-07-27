@@ -1,6 +1,6 @@
-package com.example.knowyourcolleagues.alert.dto;
+package com.example.knowyourcolleagues.dto;
 
-import com.example.knowyourcolleagues.alert.enums.AlertStatus;
+import com.example.knowyourcolleagues.enums.AlertStatus;
 import lombok.Data;
 
 import java.time.LocalDateTime;

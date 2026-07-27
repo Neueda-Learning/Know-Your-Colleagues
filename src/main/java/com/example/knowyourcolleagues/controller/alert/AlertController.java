@@ -1,12 +1,12 @@
-package com.example.knowyourcolleagues.alert.controller;
+package com.example.knowyourcolleagues.controller.alert;
 
-import com.example.knowyourcolleagues.alert.dto.AlertDetailResponse;
-import com.example.knowyourcolleagues.alert.dto.AlertHistoryResponse;
-import com.example.knowyourcolleagues.alert.dto.AlertPageResponse;
-import com.example.knowyourcolleagues.alert.dto.UpdateAlertStatusRequest;
-import com.example.knowyourcolleagues.alert.enums.AlertStatus;
-import com.example.knowyourcolleagues.alert.enums.Severity;
-import com.example.knowyourcolleagues.alert.service.AlertService;
+import com.example.knowyourcolleagues.dto.AlertDetailResponse;
+import com.example.knowyourcolleagues.dto.AlertHistoryResponse;
+import com.example.knowyourcolleagues.dto.AlertPageResponse;
+import com.example.knowyourcolleagues.dto.UpdateAlertStatusRequest;
+import com.example.knowyourcolleagues.enums.AlertStatus;
+import com.example.knowyourcolleagues.enums.Severity;
+import com.example.knowyourcolleagues.service.AlertService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
