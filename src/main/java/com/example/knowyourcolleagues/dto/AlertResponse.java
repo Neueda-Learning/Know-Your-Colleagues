@@ -4,7 +4,7 @@ import com.example.knowyourcolleagues.enums.AlertStatus;
 import com.example.knowyourcolleagues.enums.Severity;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 public class AlertResponse {
@@ -17,6 +17,6 @@ public class AlertResponse {
     private Severity severity;
     private AlertStatus status;
     private String title;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

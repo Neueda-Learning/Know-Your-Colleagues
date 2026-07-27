@@ -1,6 +1,7 @@
 package com.example.knowyourcolleagues.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.knowyourcolleagues.service.AlertService;
 import com.example.knowyourcolleagues.dto.AlertDetailResponse;
 import com.example.knowyourcolleagues.dto.AlertHistoryResponse;
@@ -10,6 +11,7 @@ import com.example.knowyourcolleagues.dto.CreateAlertCommand;
 import com.example.knowyourcolleagues.dto.UpdateAlertStatusRequest;
 import com.example.knowyourcolleagues.entity.Alert;
 import com.example.knowyourcolleagues.entity.AlertHistory;
+import com.example.knowyourcolleagues.entity.AlertTransaction;
 import com.example.knowyourcolleagues.enums.AlertStatus;
 import com.example.knowyourcolleagues.enums.Severity;
 import com.example.knowyourcolleagues.bizexception.alert.AlertNotFoundException;
@@ -18,14 +20,17 @@ import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertRequestExce
 import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertTransitionException;
 import com.example.knowyourcolleagues.mapper.AlertHistoryMapper;
 import com.example.knowyourcolleagues.mapper.AlertMapper;
+import com.example.knowyourcolleagues.mapper.AlertTransactionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,12 +46,15 @@ public class AlertServiceImpl implements AlertService {
 
     private final AlertMapper alertMapper;
     private final AlertHistoryMapper alertHistoryMapper;
+    private final AlertTransactionMapper alertTransactionMapper;
     private final Clock clock = Clock.systemUTC();
 
     @Override
     @Transactional
     public AlertResponse createAlert(CreateAlertCommand command) {
         validateCreateCommand(command);
+        List<Long> relatedTransactionIds =
+                normalizeRelatedTransactionIds(command);
 
         Alert existing = findByRuleAndTransaction(
                 command.getRuleId(),
@@ -56,7 +64,7 @@ public class AlertServiceImpl implements AlertService {
             return toResponse(existing);
         }
 
-        LocalDateTime now = LocalDateTime.now(clock);
+        Instant now = clock.instant();
         Alert alert = new Alert();
         alert.setRuleId(command.getRuleId());
         alert.setTriggerTransactionId(command.getTriggerTransactionId());
@@ -85,6 +93,7 @@ public class AlertServiceImpl implements AlertService {
 
         saveHistory(alert.getId(), null, AlertStatus.OPEN,
                 "Alert created by rule evaluation", now);
+        saveRelatedTransactions(alert.getId(), relatedTransactionIds);
         return toResponse(alert);
     }
 
@@ -92,7 +101,11 @@ public class AlertServiceImpl implements AlertService {
     @Transactional(readOnly = true)
     public AlertDetailResponse getAlert(Long alertId) {
         Alert alert = requireAlert(alertId);
-        return toDetailResponse(alert, loadHistory(alertId));
+        return toDetailResponse(
+                alert,
+                loadHistory(alertId),
+                loadRelatedTransactionIds(alertId)
+        );
     }
 
     @Override
@@ -113,26 +126,20 @@ public class AlertServiceImpl implements AlertService {
                         hasText(accountId) ? accountId.trim() : null)
                 .orderByDesc(Alert::getCreatedAt);
 
-        List<Alert> matchingAlerts = alertMapper.selectList(query);
-        long fromIndex = Math.min(page * size, matchingAlerts.size());
-        long toIndex = Math.min(fromIndex + size, matchingAlerts.size());
-        List<Alert> pageContent = matchingAlerts.subList(
-                Math.toIntExact(fromIndex),
-                Math.toIntExact(toIndex)
+        // Controller 对外使用从 0 开始的页码，MyBatis-Plus Page 使用从 1 开始的页码。
+        Page<Alert> alertPage = alertMapper.selectPage(
+                new Page<>(page + 1, size),
+                query
         );
-        long totalElements = matchingAlerts.size();
-        long totalPages = totalElements == 0
-                ? 0
-                : (totalElements + size - 1) / size;
 
         AlertPageResponse response = new AlertPageResponse();
-        response.setContent(pageContent.stream()
+        response.setContent(alertPage.getRecords().stream()
                 .map(this::toResponse)
                 .toList());
         response.setPage(page);
         response.setSize(size);
-        response.setTotalElements(totalElements);
-        response.setTotalPages(totalPages);
+        response.setTotalElements(alertPage.getTotal());
+        response.setTotalPages(alertPage.getPages());
         return response;
     }
 
@@ -152,7 +159,7 @@ public class AlertServiceImpl implements AlertService {
         validateTransition(fromStatus, targetStatus);
         validateResolutionNotes(targetStatus, request.getNotes());
 
-        LocalDateTime now = LocalDateTime.now(clock);
+        Instant now = clock.instant();
         alert.setStatus(targetStatus);
         alert.setUpdatedAt(now);
         applyStatusTimestamp(alert, targetStatus, now);
@@ -176,7 +183,11 @@ public class AlertServiceImpl implements AlertService {
                 trimToNull(request.getNotes()),
                 now
         );
-        return toDetailResponse(alert, loadHistory(alertId));
+        return toDetailResponse(
+                alert,
+                loadHistory(alertId),
+                loadRelatedTransactionIds(alertId)
+        );
     }
 
     @Override
@@ -219,12 +230,23 @@ public class AlertServiceImpl implements AlertService {
                 .toList();
     }
 
+    private List<Long> loadRelatedTransactionIds(Long alertId) {
+        return alertTransactionMapper.selectList(
+                        new LambdaQueryWrapper<AlertTransaction>()
+                                .eq(AlertTransaction::getAlertId, alertId)
+                                .orderByAsc(AlertTransaction::getId)
+                )
+                .stream()
+                .map(AlertTransaction::getTransactionId)
+                .toList();
+    }
+
     private void saveHistory(
             Long alertId,
             AlertStatus fromStatus,
             AlertStatus toStatus,
             String notes,
-            LocalDateTime changedAt
+            Instant changedAt
     ) {
         AlertHistory history = new AlertHistory();
         history.setAlertId(alertId);
@@ -233,6 +255,38 @@ public class AlertServiceImpl implements AlertService {
         history.setNotes(notes);
         history.setChangedAt(changedAt);
         alertHistoryMapper.insert(history);
+    }
+
+    private void saveRelatedTransactions(
+            Long alertId,
+            List<Long> transactionIds
+    ) {
+        for (Long transactionId : transactionIds) {
+            AlertTransaction relation = new AlertTransaction();
+            relation.setAlertId(alertId);
+            relation.setTransactionId(transactionId);
+            alertTransactionMapper.insert(relation);
+        }
+    }
+
+    private List<Long> normalizeRelatedTransactionIds(
+            CreateAlertCommand command
+    ) {
+        LinkedHashSet<Long> transactionIds = new LinkedHashSet<>();
+        transactionIds.add(command.getTriggerTransactionId());
+
+        if (command.getRelatedTransactionIds() != null) {
+            for (Long transactionId : command.getRelatedTransactionIds()) {
+                if (transactionId == null || transactionId <= 0) {
+                    throw new InvalidAlertRequestException(
+                            "relatedTransactionIds must contain only positive IDs"
+                    );
+                }
+                transactionIds.add(transactionId);
+            }
+        }
+
+        return new ArrayList<>(transactionIds);
     }
 
     private void validateCreateCommand(CreateAlertCommand command) {
@@ -299,7 +353,7 @@ public class AlertServiceImpl implements AlertService {
     private void applyStatusTimestamp(
             Alert alert,
             AlertStatus targetStatus,
-            LocalDateTime now
+            Instant now
     ) {
         switch (targetStatus) {
             case ACKNOWLEDGED -> alert.setAcknowledgedAt(now);
@@ -329,7 +383,8 @@ public class AlertServiceImpl implements AlertService {
 
     private AlertDetailResponse toDetailResponse(
             Alert alert,
-            List<AlertHistoryResponse> history
+            List<AlertHistoryResponse> history,
+            List<Long> relatedTransactionIds
     ) {
         AlertDetailResponse response = new AlertDetailResponse();
         response.setId(alert.getId());
@@ -349,6 +404,7 @@ public class AlertServiceImpl implements AlertService {
         response.setDismissedAt(alert.getDismissedAt());
         response.setUpdatedAt(alert.getUpdatedAt());
         response.setVersion(alert.getVersion());
+        response.setRelatedTransactionIds(relatedTransactionIds);
         response.setHistory(history);
         return response;
     }

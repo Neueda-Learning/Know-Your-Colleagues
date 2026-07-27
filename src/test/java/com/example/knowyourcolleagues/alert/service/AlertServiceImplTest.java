@@ -1,12 +1,15 @@
 package com.example.knowyourcolleagues.alert.service;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.knowyourcolleagues.dto.AlertDetailResponse;
+import com.example.knowyourcolleagues.dto.AlertPageResponse;
 import com.example.knowyourcolleagues.dto.AlertResponse;
 import com.example.knowyourcolleagues.dto.CreateAlertCommand;
 import com.example.knowyourcolleagues.dto.UpdateAlertStatusRequest;
 import com.example.knowyourcolleagues.entity.Alert;
 import com.example.knowyourcolleagues.entity.AlertHistory;
+import com.example.knowyourcolleagues.entity.AlertTransaction;
 import com.example.knowyourcolleagues.enums.AlertStatus;
 import com.example.knowyourcolleagues.enums.Severity;
 import com.example.knowyourcolleagues.bizexception.alert.AlertNotFoundException;
@@ -14,6 +17,7 @@ import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertRequestExce
 import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertTransitionException;
 import com.example.knowyourcolleagues.mapper.AlertHistoryMapper;
 import com.example.knowyourcolleagues.mapper.AlertMapper;
+import com.example.knowyourcolleagues.mapper.AlertTransactionMapper;
 import com.example.knowyourcolleagues.service.impl.AlertServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,14 +25,16 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.ArgumentCaptor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,12 +46,19 @@ class AlertServiceImplTest {
     @Mock
     private AlertHistoryMapper alertHistoryMapper;
 
+    @Mock
+    private AlertTransactionMapper alertTransactionMapper;
+
     private AlertServiceImpl alertService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        alertService = new AlertServiceImpl(alertMapper, alertHistoryMapper);
+        alertService = new AlertServiceImpl(
+                alertMapper,
+                alertHistoryMapper,
+                alertTransactionMapper
+        );
     }
 
     @Test
@@ -58,6 +71,8 @@ class AlertServiceImplTest {
             return 1;
         });
         when(alertHistoryMapper.insert(any(AlertHistory.class))).thenReturn(1);
+        when(alertTransactionMapper.insert(any(AlertTransaction.class)))
+                .thenReturn(1);
 
         AlertResponse response = alertService.createAlert(command);
 
@@ -67,6 +82,8 @@ class AlertServiceImplTest {
         assertThat(response.getCreatedAt()).isNotNull();
         verify(alertMapper).insert(any(Alert.class));
         verify(alertHistoryMapper).insert(any(AlertHistory.class));
+        verify(alertTransactionMapper, times(2))
+                .insert(any(AlertTransaction.class));
     }
 
     @Test
@@ -79,6 +96,8 @@ class AlertServiceImplTest {
         assertThat(response.getId()).isEqualTo(existing.getId());
         verify(alertMapper, never()).insert(any(Alert.class));
         verify(alertHistoryMapper, never()).insert(any(AlertHistory.class));
+        verify(alertTransactionMapper, never())
+                .insert(any(AlertTransaction.class));
     }
 
     @Test
@@ -88,6 +107,8 @@ class AlertServiceImplTest {
         when(alertMapper.updateById(alert)).thenReturn(1);
         when(alertHistoryMapper.insert(any(AlertHistory.class))).thenReturn(1);
         when(alertHistoryMapper.selectList(any(Wrapper.class)))
+                .thenReturn(List.of());
+        when(alertTransactionMapper.selectList(any(Wrapper.class)))
                 .thenReturn(List.of());
 
         UpdateAlertStatusRequest request = new UpdateAlertStatusRequest();
@@ -146,6 +167,39 @@ class AlertServiceImplTest {
                 .hasMessageContaining("999");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldQueryAlertsWithDatabasePagination() {
+        Alert alert = openAlert();
+        when(alertMapper.selectPage(any(Page.class), any(Wrapper.class)))
+                .thenAnswer(invocation -> {
+                    Page<Alert> requestedPage = invocation.getArgument(0);
+                    requestedPage.setRecords(List.of(alert));
+                    requestedPage.setTotal(21L);
+                    return requestedPage;
+                });
+
+        AlertPageResponse response = alertService.getAlerts(
+                AlertStatus.OPEN,
+                Severity.HIGH,
+                "ACC-001",
+                1,
+                10
+        );
+
+        ArgumentCaptor<Page<Alert>> pageCaptor =
+                ArgumentCaptor.forClass(Page.class);
+        verify(alertMapper).selectPage(pageCaptor.capture(), any(Wrapper.class));
+
+        // API 第 1 页对应 MyBatis-Plus 的第 2 页。
+        assertThat(pageCaptor.getValue().getCurrent()).isEqualTo(2L);
+        assertThat(pageCaptor.getValue().getSize()).isEqualTo(10L);
+        assertThat(response.getPage()).isEqualTo(1L);
+        assertThat(response.getContent()).hasSize(1);
+        assertThat(response.getTotalElements()).isEqualTo(21L);
+        assertThat(response.getTotalPages()).isEqualTo(3L);
+    }
+
     private CreateAlertCommand validCreateCommand() {
         CreateAlertCommand command = new CreateAlertCommand();
         command.setRuleId(1L);
@@ -155,11 +209,12 @@ class AlertServiceImplTest {
         command.setSeverity(Severity.HIGH);
         command.setTitle("Large transaction detected");
         command.setDescription("Amount exceeded configured threshold");
+        command.setRelatedTransactionIds(List.of(5001L, 5002L, 5002L));
         return command;
     }
 
     private Alert openAlert() {
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         Alert alert = new Alert();
         alert.setId(101L);
         alert.setRuleId(1L);
