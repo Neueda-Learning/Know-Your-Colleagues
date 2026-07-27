@@ -8,7 +8,7 @@ import com.example.knowyourcolleagues.enums.AlertStatus;
 import com.example.knowyourcolleagues.enums.Severity;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @TableName("alerts")
@@ -26,12 +26,12 @@ public class Alert {
     private String title;
     private String description;
     private String resolutionNotes;
-    private LocalDateTime createdAt;
-    private LocalDateTime acknowledgedAt;
-    private LocalDateTime investigatingAt;
-    private LocalDateTime closedAt;
-    private LocalDateTime dismissedAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant acknowledgedAt;
+    private Instant investigatingAt;
+    private Instant closedAt;
+    private Instant dismissedAt;
+    private Instant updatedAt;
 
     @Version
     private Integer version;
