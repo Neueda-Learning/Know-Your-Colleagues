@@ -1,7 +1,9 @@
 package com.example.knowyourcolleagues.alert.service;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.knowyourcolleagues.dto.AlertDetailResponse;
+import com.example.knowyourcolleagues.dto.AlertPageResponse;
 import com.example.knowyourcolleagues.dto.AlertResponse;
 import com.example.knowyourcolleagues.dto.CreateAlertCommand;
 import com.example.knowyourcolleagues.dto.UpdateAlertStatusRequest;
@@ -23,6 +25,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.util.List;
@@ -162,6 +165,39 @@ class AlertServiceImplTest {
         assertThatThrownBy(() -> alertService.getAlert(999L))
                 .isInstanceOf(AlertNotFoundException.class)
                 .hasMessageContaining("999");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldQueryAlertsWithDatabasePagination() {
+        Alert alert = openAlert();
+        when(alertMapper.selectPage(any(Page.class), any(Wrapper.class)))
+                .thenAnswer(invocation -> {
+                    Page<Alert> requestedPage = invocation.getArgument(0);
+                    requestedPage.setRecords(List.of(alert));
+                    requestedPage.setTotal(21L);
+                    return requestedPage;
+                });
+
+        AlertPageResponse response = alertService.getAlerts(
+                AlertStatus.OPEN,
+                Severity.HIGH,
+                "ACC-001",
+                1,
+                10
+        );
+
+        ArgumentCaptor<Page<Alert>> pageCaptor =
+                ArgumentCaptor.forClass(Page.class);
+        verify(alertMapper).selectPage(pageCaptor.capture(), any(Wrapper.class));
+
+        // API 第 1 页对应 MyBatis-Plus 的第 2 页。
+        assertThat(pageCaptor.getValue().getCurrent()).isEqualTo(2L);
+        assertThat(pageCaptor.getValue().getSize()).isEqualTo(10L);
+        assertThat(response.getPage()).isEqualTo(1L);
+        assertThat(response.getContent()).hasSize(1);
+        assertThat(response.getTotalElements()).isEqualTo(21L);
+        assertThat(response.getTotalPages()).isEqualTo(3L);
     }
 
     private CreateAlertCommand validCreateCommand() {
