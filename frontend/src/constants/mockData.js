@@ -127,20 +127,51 @@ export const ALERTS = [
 ];
 
 export const TRANSACTION_STATUS_LABEL = {
-  completed: "completed",
-  pending: "pending",
-  failed: "failed",
-  reversed: "withdrawn",
+  COMPLETED: "COMPLETED",
+  PENDING: "PENDING",
+  FAILED: "FAILED",
 };
 export const TRANSACTION_STATUS_COLOR = {
-  completed: "success",
-  pending: "processing",
-  failed: "error",
-  reversed: "default",
+  COMPLETED: "success",
+  PENDING: "processing",
+  FAILED: "error",
 };
 
 export const TRANSACTION_TYPE_LABEL = { DEBIT: "DEBIT", CREDIT: "CREDIT" };
 export const TRANSACTION_TYPE_COLOR = { DEBIT: "error", CREDIT: "success" };
+
+/** ISO 4217 codes commonly used in World Bank reporting / settlements */
+export const CURRENCY_OPTIONS = [
+  { label: "USD — US Dollar", value: "USD" },
+  { label: "CNY — Chinese Yuan (RMB)", value: "CNY" },
+  { label: "EUR — Euro", value: "EUR" },
+  { label: "GBP — British Pound", value: "GBP" },
+  { label: "JPY — Japanese Yen", value: "JPY" },
+  { label: "CHF — Swiss Franc", value: "CHF" },
+  { label: "CAD — Canadian Dollar", value: "CAD" },
+  { label: "AUD — Australian Dollar", value: "AUD" },
+  { label: "HKD — Hong Kong Dollar", value: "HKD" },
+  { label: "SGD — Singapore Dollar", value: "SGD" },
+  { label: "KRW — South Korean Won", value: "KRW" },
+  { label: "INR — Indian Rupee", value: "INR" },
+  { label: "BRL — Brazilian Real", value: "BRL" },
+  { label: "RUB — Russian Ruble", value: "RUB" },
+  { label: "ZAR — South African Rand", value: "ZAR" },
+  { label: "MXN — Mexican Peso", value: "MXN" },
+  { label: "SEK — Swedish Krona", value: "SEK" },
+  { label: "NOK — Norwegian Krone", value: "NOK" },
+  { label: "DKK — Danish Krone", value: "DKK" },
+  { label: "NZD — New Zealand Dollar", value: "NZD" },
+  { label: "TRY — Turkish Lira", value: "TRY" },
+  { label: "PLN — Polish Zloty", value: "PLN" },
+  { label: "THB — Thai Baht", value: "THB" },
+  { label: "MYR — Malaysian Ringgit", value: "MYR" },
+  { label: "IDR — Indonesian Rupiah", value: "IDR" },
+  { label: "PHP — Philippine Peso", value: "PHP" },
+  { label: "VND — Vietnamese Dong", value: "VND" },
+  { label: "AED — UAE Dirham", value: "AED" },
+  { label: "SAR — Saudi Riyal", value: "SAR" },
+];
 
 export const TRANSACTIONS = [
   { key: "TXN-100234", accountId: "ACC-10021", counterpartyId: "CPTY-88823", type: "DEBIT", amount: 1250.0, currency: "USD", timestamp: "2026-07-26 09:31:12", description: "Wire transfer to vendor", status: "completed" },
@@ -154,4 +185,3 @@ export const TRANSACTIONS = [
 ];
 
 export const ACCOUNT_OPTIONS = [...new Set(TRANSACTIONS.map((t) => t.accountId))].map((id) => ({ label: id, value: id }));
-export const CURRENCY_OPTIONS = [...new Set(TRANSACTIONS.map((t) => t.currency))].map((c) => ({ label: c, value: c }));
