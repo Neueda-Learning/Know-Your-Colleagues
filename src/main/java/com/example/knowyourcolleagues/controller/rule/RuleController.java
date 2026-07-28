@@ -21,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -156,6 +157,8 @@ public class RuleController {
             )
     })
     public ResponseEntity<RulePageResponse> getRules(
+            @Parameter(description = "规则名称或描述关键字，支持模糊查询", example = "大额")
+            @RequestParam(required = false) String keyword,
             @Parameter(
                     description = "规则类型",
                     example = "AMOUNT_THRESHOLD"
@@ -174,7 +177,9 @@ public class RuleController {
             @RequestParam(defaultValue = "20") long size
     ) {
         return ResponseEntity.ok(
-                ruleService.getRules(type, enabled, severity, page, size)
+                ruleService.getRules(
+                        keyword, type, enabled, severity, page, size
+                )
         );
     }
 
@@ -215,6 +220,47 @@ public class RuleController {
             @PathVariable Long ruleId
     ) {
         return ResponseEntity.ok(ruleService.getRule(ruleId));
+    }
+
+    @DeleteMapping("/{ruleId}")
+    @Operation(
+            summary = "删除监控规则",
+            description = "删除尚未产生告警的规则。已有告警引用的规则将保留，以确保审计链路完整。"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "规则删除成功"),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "规则 ID 不合法",
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "规则不存在",
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "规则已产生告警，不能删除",
+                    content = @Content(
+                            schema = @Schema(implementation = ErrorResponse.class)
+                    )
+            )
+    })
+    public ResponseEntity<Void> deleteRule(
+            @Parameter(
+                    description = "规则 ID，必须为正整数",
+                    example = "1",
+                    required = true
+            )
+            @PathVariable Long ruleId
+    ) {
+        ruleService.deleteRule(ruleId);
+        return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{ruleId}")

@@ -127,7 +127,7 @@ public class AlertServiceImpl implements AlertService {
         LambdaQueryWrapper<Alert> query = new LambdaQueryWrapper<Alert>()
                 .eq(status != null, Alert::getStatus, status)
                 .eq(severity != null, Alert::getSeverity, severity)
-                .eq(hasText(accountId), Alert::getAccountId,
+                .like(hasText(accountId), Alert::getAccountId,
                         hasText(accountId) ? accountId.trim() : null)
                 .ge(createdAtStart != null, Alert::getCreatedAt,
                         createdAtStart)

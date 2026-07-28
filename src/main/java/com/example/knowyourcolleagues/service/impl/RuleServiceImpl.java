@@ -3,6 +3,7 @@ package com.example.knowyourcolleagues.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.knowyourcolleagues.bizexception.rule.ConcurrentRuleUpdateException;
+import com.example.knowyourcolleagues.bizexception.rule.RuleDeletionConflictException;
 import com.example.knowyourcolleagues.bizexception.rule.InvalidRuleRequestException;
 import com.example.knowyourcolleagues.bizexception.rule.RuleNotFoundException;
 import com.example.knowyourcolleagues.dto.CreateRuleRequest;
@@ -11,9 +12,11 @@ import com.example.knowyourcolleagues.dto.RuleResponse;
 import com.example.knowyourcolleagues.dto.UpdateRuleEnabledRequest;
 import com.example.knowyourcolleagues.dto.UpdateRuleRequest;
 import com.example.knowyourcolleagues.entity.Rule;
+import com.example.knowyourcolleagues.entity.Alert;
 import com.example.knowyourcolleagues.enums.RuleType;
 import com.example.knowyourcolleagues.enums.Severity;
 import com.example.knowyourcolleagues.mapper.RuleMapper;
+import com.example.knowyourcolleagues.mapper.AlertMapper;
 import com.example.knowyourcolleagues.service.RuleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,7 @@ public class RuleServiceImpl implements RuleService {
     private static final long MAX_PAGE_SIZE = 100;
 
     private final RuleMapper ruleMapper;
+    private final AlertMapper alertMapper;
     private final Clock clock = Clock.systemUTC();
 
     @Override
@@ -64,6 +68,7 @@ public class RuleServiceImpl implements RuleService {
     @Override
     @Transactional(readOnly = true)
     public RulePageResponse getRules(
+            String keyword,
             RuleType type,
             Boolean enabled,
             Severity severity,
@@ -74,6 +79,10 @@ public class RuleServiceImpl implements RuleService {
         Page<Rule> result = ruleMapper.selectPage(
                 new Page<>(page + 1, size),
                 new LambdaQueryWrapper<Rule>()
+                        .and(hasText(keyword), wrapper -> wrapper
+                                .like(Rule::getName, keyword.trim())
+                                .or()
+                                .like(Rule::getDescription, keyword.trim()))
                         .eq(type != null, Rule::getType, type)
                         .eq(enabled != null, Rule::getEnabled, enabled)
                         .eq(severity != null, Rule::getSeverity, severity)
@@ -96,6 +105,26 @@ public class RuleServiceImpl implements RuleService {
     @Transactional(readOnly = true)
     public RuleResponse getRule(Long ruleId) {
         return toResponse(requireRule(ruleId));
+    }
+
+    @Override
+    @Transactional
+    public void deleteRule(Long ruleId) {
+        requireRule(ruleId);
+        Long alertCount = alertMapper.selectCount(
+                new LambdaQueryWrapper<Alert>()
+                        .eq(Alert::getRuleId, ruleId)
+        );
+        if (alertCount != null && alertCount > 0) {
+            throw new RuleDeletionConflictException(
+                    "Rule cannot be deleted because alerts reference it: "
+                            + ruleId
+            );
+        }
+        int deletedRows = ruleMapper.deleteById(ruleId);
+        if (deletedRows != 1) {
+            throw new RuleNotFoundException("Rule not found: " + ruleId);
+        }
     }
 
     @Override
