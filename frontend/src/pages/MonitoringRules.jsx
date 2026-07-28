@@ -92,7 +92,7 @@ export default function MonitoringRulesPage() {
             setTotal(totalCount);
         } catch (error) {
             console.error('Fetch rules failed:', error);
-            message.error(error.response?.data?.message || '获取规则列表失败');
+            message.error(error.response?.data?.message || 'Failed to obtain the rule list');
         } finally {
             setLoading(false);
         }
@@ -120,17 +120,17 @@ export default function MonitoringRulesPage() {
                 enabled,
                 version: record.version, // 带上乐观锁版本号
             });
-            message.success(`规则已${enabled ? '启用' : '停用'}`);
+            message.success(`Rule ${enabled ? 'enabled' : 'disabled'}`);
             setRules((prev) =>
                 prev.map((r) => (r.id === record.id ? { ...r, enabled: res.data.enabled, version: res.data.version } : r))
             );
         } catch (error) {
             console.error('Toggle status failed:', error);
             if (error.response?.status === 409) {
-                message.error('规则已被他人修改，请刷新重试');
+                message.error('The rule has been modified by another user. Please refresh and try again.');
                 fetchRules();
             } else {
-                message.error(error.response?.data?.message || '更新规则状态失败');
+                message.error(error.response?.data?.message || 'Failed to update rule status');
             }
         }
     };
@@ -199,7 +199,7 @@ export default function MonitoringRulesPage() {
                 }
 
                 await axios.put(`${API_BASE}/${editingRule.id}`, payload);
-                message.success('规则修改成功');
+                message.success('Rule modified successfully');
             } else {
                 // 新增规则 (POST /api/rules)
                 const payload = {
@@ -222,7 +222,7 @@ export default function MonitoringRulesPage() {
                 }
 
                 await axios.post(API_BASE, payload);
-                message.success('规则创建成功');
+                message.success('Rule created successfully');
             }
 
             setIsDrawerOpen(false);
@@ -230,9 +230,9 @@ export default function MonitoringRulesPage() {
         } catch (error) {
             console.error('Save rule failed:', error);
             if (error.response?.status === 409) {
-                message.error('提交失败：规则已被他人修改，请重新加载');
+                message.error('Submission failed: The rule has been modified by another user. Please reload and try again.');
             } else {
-                message.error(error.response?.data?.message || '保存失败，请检查输入项');
+                message.error(error.response?.data?.message || 'Save failed, please check your input');
             }
         } finally {
             setSubmitting(false);
