@@ -1,49 +1,40 @@
-import React, { useState, useMemo } from 'react';
-import { Table, Tag, Input, Button, Switch, Drawer, Form, Select, InputNumber } from 'antd';
-import { Search, Plus, Trash2, SlidersHorizontal } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+    Table,
+    Tag,
+    Input,
+    Button,
+    Switch,
+    Drawer,
+    Form,
+    Select,
+    InputNumber,
+    message,
+    Descriptions,
+} from 'antd';
+import { Search, Plus, SlidersHorizontal, RefreshCw } from 'lucide-react';
+import axios from 'axios';
 import { COLORS } from '../constants/theme';
 
-// 与模板一致的 Mono 字体渲染辅助函数
+const API_BASE = '/api/rules';
+
+const fieldLabelStyle = {
+    display: 'block',
+    fontSize: 12,
+    fontWeight: 600,
+    color: COLORS.ink,
+    marginBottom: 6,
+};
+
+const filterInputStyle = {
+    width: '100%',
+};
+
 const monoCell = (content, extraStyle = {}) => (
     <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: COLORS.slate, ...extraStyle }}>
     {content}
   </span>
 );
-
-const INITIAL_RULES = [
-    {
-        key: 'rule-1',
-        name: 'High Value Transaction',
-        type: 'AMOUNT_THRESHOLD',
-        severity: 'HIGH',
-        parameters: { threshold: 10000 },
-        enabled: true,
-    },
-    {
-        key: 'rule-2',
-        name: 'Rapid Transactions',
-        type: 'VELOCITY',
-        severity: 'HIGH',
-        parameters: { maxTransactions: 5, timeWindowValue: 10, timeWindowUnit: 'Minutes' },
-        enabled: true,
-    },
-    {
-        key: 'rule-3',
-        name: 'New Payee Detection',
-        type: 'NEW_PAYEE',
-        severity: 'MEDIUM',
-        parameters: {},
-        enabled: true,
-    },
-    {
-        key: 'rule-4',
-        name: 'Daily Limit Exceeded',
-        type: 'DAILY_LIMIT',
-        severity: 'HIGH',
-        parameters: { dailyLimit: 50000 },
-        enabled: false,
-    },
-];
 
 const SEVERITY_COLORS = {
     HIGH: 'error',
@@ -51,98 +42,223 @@ const SEVERITY_COLORS = {
     LOW: 'default',
 };
 
+function formatDateTime(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return String(value);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 export default function MonitoringRulesPage() {
-    // 保存变化的数据并渲染页面
-    const [rules, setRules] = useState(INITIAL_RULES);
-    const [keyword, setKeyword] = useState('');
+    // 顶部筛选条件拆分
+    const [filters, setFilters] = useState({
+        type: undefined,
+        enabled: undefined,
+        severity: undefined,
+        keyword: '',
+    });
+
+    const [rules, setRules] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [total, setTotal] = useState(0);
+    const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+
+    // Drawer / Form 状态
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editingRule, setEditingRule] = useState(null);
+    const [submitting, setSubmitting] = useState(false);
     const [form] = Form.useForm();
 
-    // 模糊搜索过滤  "搜索匹配条件的规则"
+    // 获取规则列表 (对应 RulePageResponse)
+    const fetchRules = useCallback(async () => {
+        setLoading(true);
+        try {
+            const params = {
+                page: pagination.current - 1, // 后端分页 index 从 0 开始
+                size: pagination.pageSize,
+            };
+
+            if (filters.type) params.type = filters.type;
+            if (filters.enabled !== undefined && filters.enabled !== null) params.enabled = filters.enabled;
+            if (filters.severity) params.severity = filters.severity;
+
+            const res = await axios.get(API_BASE, { params });
+            const data = res.data;
+            const list = data.content || data.items || data.rules || [];
+            const totalCount = data.totalElements ?? data.total ?? list.length;
+
+            setRules(list);
+            setTotal(totalCount);
+        } catch (error) {
+            console.error('Fetch rules failed:', error);
+            message.error(error.response?.data?.message || '获取规则列表失败');
+        } finally {
+            setLoading(false);
+        }
+    }, [pagination.current, pagination.pageSize, filters.type, filters.enabled, filters.severity]);
+
+    useEffect(() => {
+        fetchRules();
+    }, [fetchRules]);
+
+    // 前端关键字过滤
     const filteredData = useMemo(() => {
-        const q = keyword.trim().toLowerCase();
+        const q = filters.keyword.trim().toLowerCase();
         if (!q) return rules;
         return rules.filter(
             (row) =>
-                row.name.toLowerCase().includes(q) ||
-                row.type.toLowerCase().includes(q) ||
-                row.severity.toLowerCase().includes(q)
+                row.name?.toLowerCase().includes(q) ||
+                row.description?.toLowerCase().includes(q)
         );
-    }, [rules, keyword]);
+    }, [rules, filters.keyword]);
 
-    // 格式化参数显示，转换成用户能看懂的文字，显示在页面表格里
-    const formatParameters = (rule) => {
-        switch (rule.type) {
-            case 'AMOUNT_THRESHOLD':
-                return `Threshold: $${Number(rule.parameters?.threshold || 0).toLocaleString('en-US')}`;
-            case 'VELOCITY':
-                return `Max ${rule.parameters?.maxTransactions || 0} txs in ${rule.parameters?.timeWindowValue || 0} ${rule.parameters?.timeWindowUnit?.toLowerCase() || 'mins'}`;
-            case 'DAILY_LIMIT':
-                return `Daily Limit: $${Number(rule.parameters?.dailyLimit || 0).toLocaleString('en-US')}`;
-            case 'NEW_PAYEE':
-            default:
-                return 'No parameter required';
+    // 修改启用状态 (PATCH /api/rules/{ruleId}/enabled)
+    const handleToggleRule = async (record, enabled) => {
+        try {
+            const res = await axios.patch(`${API_BASE}/${record.id}/enabled`, {
+                enabled,
+                version: record.version, // 带上乐观锁版本号
+            });
+            message.success(`规则已${enabled ? '启用' : '停用'}`);
+            setRules((prev) =>
+                prev.map((r) => (r.id === record.id ? { ...r, enabled: res.data.enabled, version: res.data.version } : r))
+            );
+        } catch (error) {
+            console.error('Toggle status failed:', error);
+            if (error.response?.status === 409) {
+                message.error('规则已被他人修改，请刷新重试');
+                fetchRules();
+            } else {
+                message.error(error.response?.data?.message || '更新规则状态失败');
+            }
         }
     };
 
-    // 快捷切换规则开启/关闭
-    const handleToggleRule = (key, enabled) => {
-        setRules((prev) => prev.map((r) => (r.key === key ? { ...r, enabled } : r)));
-    };
-
-    // 删除规则
-    const handleDeleteRule = (key, e) => {
-        e.stopPropagation();
-        setRules((prev) => prev.filter((r) => r.key !== key));
-    };
-
-    // 打开新建抽屉
+    // 打开新建 Drawer
     const handleAddNew = () => {
-        setEditingRule(null);  // 清空当前编辑对象，创建新规则
+        setEditingRule(null);
         form.resetFields();
         form.setFieldsValue({
-            name: 'New Rule',
+            name: '',
+            description: '',
             type: 'AMOUNT_THRESHOLD',
             severity: 'MEDIUM',
             enabled: true,
-            parameters: { threshold: 1000 },
+            currency: 'USD',
+            thresholdAmount: 10000,
+            transactionCount: 5,
+            timeWindowMinutes: 10,
+            dailyLimitAmount: 50000,
         });
-        setIsDrawerOpen(true); // 打开抽屉
+        setIsDrawerOpen(true);
     };
 
-    // 打开编辑抽屉
+    // 打开编辑 Drawer
     const handleEdit = (record) => {
         setEditingRule(record);
-        form.setFieldsValue(JSON.parse(JSON.stringify(record)));
+        form.resetFields();
+        form.setFieldsValue({
+            name: record.name,
+            description: record.description,
+            type: record.type,
+            severity: record.severity,
+            currency: record.currency || 'USD',
+            thresholdAmount: record.thresholdAmount,
+            transactionCount: record.transactionCount,
+            timeWindowMinutes: record.timeWindowMinutes,
+            dailyLimitAmount: record.dailyLimitAmount,
+        });
         setIsDrawerOpen(true);
     };
 
     // 保存规则
     const handleSave = async () => {
         try {
-            const values = await form.validateFields(); // 把用户填写的数据拿出来
-            if (editingRule) { // 有没有正在编辑的规则
-                setRules((prev) => prev.map((r) => (r.key === editingRule.key ? { ...r, ...values } : r))); // 编辑旧规则
-            } else {  // 新增新规则
-                const newRule = {
-                    ...values,
-                    key: `rule-${Date.now()}`,
+            const values = await form.validateFields();
+            setSubmitting(true);
+
+            if (editingRule) {
+                // 修改规则 (PUT /api/rules/{ruleId})
+                const payload = {
+                    name: values.name,
+                    description: values.description,
+                    severity: values.severity,
+                    version: editingRule.version, // 乐观锁
                 };
-                setRules((prev) => [...prev, newRule]);  // 添加到规则数组
+
+                if (editingRule.type === 'AMOUNT_THRESHOLD') {
+                    payload.currency = values.currency;
+                    payload.thresholdAmount = values.thresholdAmount;
+                } else if (editingRule.type === 'VELOCITY') {
+                    payload.transactionCount = values.transactionCount;
+                    payload.timeWindowMinutes = values.timeWindowMinutes;
+                } else if (editingRule.type === 'DAILY_LIMIT') {
+                    payload.currency = values.currency;
+                    payload.dailyLimitAmount = values.dailyLimitAmount;
+                }
+
+                await axios.put(`${API_BASE}/${editingRule.id}`, payload);
+                message.success('规则修改成功');
+            } else {
+                // 新增规则 (POST /api/rules)
+                const payload = {
+                    name: values.name,
+                    description: values.description,
+                    type: values.type,
+                    severity: values.severity,
+                    enabled: values.enabled ?? true,
+                };
+
+                if (values.type === 'AMOUNT_THRESHOLD') {
+                    payload.currency = values.currency;
+                    payload.thresholdAmount = values.thresholdAmount;
+                } else if (values.type === 'VELOCITY') {
+                    payload.transactionCount = values.transactionCount;
+                    payload.timeWindowMinutes = values.timeWindowMinutes;
+                } else if (values.type === 'DAILY_LIMIT') {
+                    payload.currency = values.currency;
+                    payload.dailyLimitAmount = values.dailyLimitAmount;
+                }
+
+                await axios.post(API_BASE, payload);
+                message.success('规则创建成功');
             }
-            setIsDrawerOpen(false);  // 关闭右侧窗口
+
+            setIsDrawerOpen(false);
+            fetchRules();
         } catch (error) {
-            console.error('Validation failed:', error);
+            console.error('Save rule failed:', error);
+            if (error.response?.status === 409) {
+                message.error('提交失败：规则已被他人修改，请重新加载');
+            } else {
+                message.error(error.response?.data?.message || '保存失败，请检查输入项');
+            }
+        } finally {
+            setSubmitting(false);
         }
     };
 
-    const columns = [  // 表格列配置
+    const columns = [
+        {
+            title: 'Rule ID',
+            dataIndex: 'id',
+            key: 'id',
+            width: 90,
+            render: (v) => monoCell(v),
+        },
         {
             title: 'Rule Name',
             dataIndex: 'name',
             key: 'name',
-            render: (v) => <span style={{ fontSize: 13, fontWeight: 500, color: COLORS.ink }}>{v}</span>,
+            render: (v, record) => (
+                <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: COLORS.ink }}>{v}</div>
+                    {record.description && (
+                        <div style={{ fontSize: 12, color: COLORS.slate, marginTop: 2 }}>{record.description}</div>
+                    )}
+                </div>
+            ),
         },
         {
             title: 'Type',
@@ -157,13 +273,6 @@ export default function MonitoringRulesPage() {
             render: (severity) => <Tag color={SEVERITY_COLORS[severity]}>{severity}</Tag>,
         },
         {
-            title: 'Parameters',
-            key: 'parameters',
-            render: (_, record) => (
-                <span style={{ fontSize: 13, color: COLORS.slate }}>{formatParameters(record)}</span>
-            ),
-        },
-        {
             title: 'Enabled',
             dataIndex: 'enabled',
             key: 'enabled',
@@ -174,7 +283,7 @@ export default function MonitoringRulesPage() {
                     checked={enabled}
                     onChange={(checked, e) => {
                         e.stopPropagation();
-                        handleToggleRule(record.key, checked);
+                        handleToggleRule(record, checked);
                     }}
                 />
             ),
@@ -185,41 +294,139 @@ export default function MonitoringRulesPage() {
             align: 'right',
             render: (_, record) => (
                 <Button
-                    type="text"
-                    danger
-                    icon={<Trash2 size={15} />}
-                    onClick={(e) => handleDeleteRule(record.key, e)}
-                />
+                    type="link"
+                    size="small"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(record);
+                    }}
+                >
+                    Edit
+                </Button>
             ),
         },
     ];
 
-    const currentType = Form.useWatch('type', form); // 实时监听表单里面 type 这个字段的变化
+    const currentType = Form.useWatch('type', form);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* 搜索与新增工具栏 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Input
-                    allowClear
-                    placeholder="search Rule Name / Type / Severity"
-                    prefix={<Search size={15} color={COLORS.slate} />}
-                    style={{ maxWidth: 380 }}
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                />
-                <Button type="primary" icon={<Plus size={15} />} onClick={handleAddNew}>
-                    Add New Rule
-                </Button>
+            {/* 卡片过滤器 */}
+            <div
+                style={{
+                    background: COLORS.card,
+                    border: `1px solid ${COLORS.border}`,
+                    borderRadius: 12,
+                    padding: '16px 20px',
+                }}
+            >
+                <div
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                        gap: 12,
+                        alignItems: 'end',
+                    }}
+                >
+                    <div>
+                        <label style={fieldLabelStyle}>Search Keyword</label>
+                        <Input
+                            allowClear
+                            placeholder="Search Name / Description"
+                            prefix={<Search size={15} color={COLORS.slate} />}
+                            style={filterInputStyle}
+                            value={filters.keyword}
+                            onChange={(e) => setFilters((prev) => ({ ...prev, keyword: e.target.value }))}
+                        />
+                    </div>
+
+                    <div>
+                        <label style={fieldLabelStyle}>Rule Type</label>
+                        <Select
+                            allowClear
+                            placeholder="All Types"
+                            style={filterInputStyle}
+                            value={filters.type}
+                            onChange={(val) => {
+                                setFilters((prev) => ({ ...prev, type: val }));
+                                setPagination((p) => ({ ...p, current: 1 }));
+                            }}
+                        >
+                            <Select.Option value="AMOUNT_THRESHOLD">AMOUNT_THRESHOLD</Select.Option>
+                            <Select.Option value="VELOCITY">VELOCITY</Select.Option>
+                            <Select.Option value="NEW_PAYEE">NEW_PAYEE</Select.Option>
+                            <Select.Option value="DAILY_LIMIT">DAILY_LIMIT</Select.Option>
+                        </Select>
+                    </div>
+
+                    <div>
+                        <label style={fieldLabelStyle}>Enabled Status</label>
+                        <Select
+                            allowClear
+                            placeholder="All Status"
+                            style={filterInputStyle}
+                            value={filters.enabled}
+                            onChange={(val) => {
+                                setFilters((prev) => ({ ...prev, enabled: val }));
+                                setPagination((p) => ({ ...p, current: 1 }));
+                            }}
+                        >
+                            <Select.Option value={true}>Enabled</Select.Option>
+                            <Select.Option value={false}>Disabled</Select.Option>
+                        </Select>
+                    </div>
+
+                    <div>
+                        <label style={fieldLabelStyle}>Severity</label>
+                        <Select
+                            allowClear
+                            placeholder="All Severities"
+                            style={filterInputStyle}
+                            value={filters.severity}
+                            onChange={(val) => {
+                                setFilters((prev) => ({ ...prev, severity: val }));
+                                setPagination((p) => ({ ...p, current: 1 }));
+                            }}
+                        >
+                            <Select.Option value="HIGH">HIGH</Select.Option>
+                            <Select.Option value="MEDIUM">MEDIUM</Select.Option>
+                            <Select.Option value="LOW">LOW</Select.Option>
+                        </Select>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <Button
+                            icon={<RefreshCw size={14} />}
+                            onClick={fetchRules}
+                            loading={loading}
+                            style={{ flex: 1 }}
+                        >
+                            Reload
+                        </Button>
+                        <Button type="primary" icon={<Plus size={15} />} onClick={handleAddNew}>
+                            New Rule
+                        </Button>
+                    </div>
+                </div>
             </div>
 
-            {/* 表格主容器，样式对齐模板 */}
+            {/* 数据表格 */}
             <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, overflow: 'hidden' }}>
                 <Table
+                    rowKey="id"
+                    loading={loading}
                     columns={columns}
                     dataSource={filteredData}
                     size="middle"
-                    pagination={{ pageSize: 6, showTotal: (total) => `${total} rules` }}
+                    pagination={{
+                        current: pagination.current,
+                        pageSize: pagination.pageSize,
+                        total: total,
+                        showSizeChanger: true,
+                        showQuickJumper: true, // 👈 加上这行，右下角就会多出一个“Go to [  ]”的输入框
+                        onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
+                        showTotal: (t) => `Total ${t} rules`,
+                    }}
                     onRow={(record) => ({
                         onClick: () => handleEdit(record),
                         style: { cursor: 'pointer' },
@@ -227,26 +434,37 @@ export default function MonitoringRulesPage() {
                 />
             </div>
 
-            {/* 编辑/新建抽屉/右侧弹窗 */}
+            {/* 新增 / 编辑抽屉 */}
             <Drawer
                 title={
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <SlidersHorizontal size={16} color={COLORS.primary || '#1677ff'} />
-                        <span>{editingRule ? 'Edit Rule' : 'Create New Rule'}</span>
+                        <span>{editingRule ? `Edit Rule #${editingRule.id}` : 'Create New Rule'}</span>
                     </div>
                 }
-                width={380}
+                width={440}
                 onClose={() => setIsDrawerOpen(false)}
                 open={isDrawerOpen}
                 extra={
-                    <Button type="primary" onClick={handleSave}>
+                    <Button type="primary" onClick={handleSave} loading={submitting}>
                         Save
                     </Button>
                 }
             >
                 <Form form={form} layout="vertical">
+                    {editingRule && (
+                        <Descriptions column={2} size="small" style={{ marginBottom: 16 }} bordered>
+                            <Descriptions.Item label="Version">{editingRule.version}</Descriptions.Item>
+                            <Descriptions.Item label="Created">{formatDateTime(editingRule.createdAt)}</Descriptions.Item>
+                        </Descriptions>
+                    )}
+
                     <Form.Item name="name" label="Rule Name" rules={[{ required: true, message: 'Please enter rule name' }]}>
-                        <Input />
+                        <Input placeholder="e.g., Large USD Transaction" />
+                    </Form.Item>
+
+                    <Form.Item name="description" label="Description">
+                        <Input.TextArea rows={2} placeholder="Describe the trigger condition" />
                     </Form.Item>
 
                     <Form.Item name="type" label="Rule Type" rules={[{ required: true }]}>
@@ -266,42 +484,45 @@ export default function MonitoringRulesPage() {
                         </Select>
                     </Form.Item>
 
-                    {/* 参数根据类型动态渲染 */}
+                    {/* 抽屉编辑框内部仍保留针对不同 Rule Type 的参数设置项（与创建/更新 API RequestBody 参数对齐） */}
+                    {(currentType === 'AMOUNT_THRESHOLD' || currentType === 'DAILY_LIMIT') && (
+                        <Form.Item name="currency" label="Currency" rules={[{ required: true }]}>
+                            <Select>
+                                <Select.Option value="USD">USD</Select.Option>
+                                <Select.Option value="EUR">EUR</Select.Option>
+                                <Select.Option value="CNY">CNY</Select.Option>
+                            </Select>
+                        </Form.Item>
+                    )}
+
                     {currentType === 'AMOUNT_THRESHOLD' && (
-                        <Form.Item name={['parameters', 'threshold']} label="Threshold Amount ($)" rules={[{ required: true }]}>
-                            <InputNumber style={{ width: '100%' }} />
+                        <Form.Item name="thresholdAmount" label="Threshold Amount" rules={[{ required: true, message: 'Please enter threshold amount' }]}>
+                            <InputNumber style={{ width: '100%' }} min={0} precision={2} />
                         </Form.Item>
                     )}
 
                     {currentType === 'VELOCITY' && (
-                        <>
-                            <Form.Item name={['parameters', 'maxTransactions']} label="Max Transactions" rules={[{ required: true }]}>
-                                <InputNumber style={{ width: '100%' }} />
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <Form.Item name="transactionCount" label="Transaction Count" style={{ flex: 1 }} rules={[{ required: true }]}>
+                                <InputNumber style={{ width: '100%' }} min={1} precision={0} />
                             </Form.Item>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                                <Form.Item name={['parameters', 'timeWindowValue']} label="Window Value" style={{ flex: 1 }} rules={[{ required: true }]}>
-                                    <InputNumber style={{ width: '100%' }} />
-                                </Form.Item>
-                                <Form.Item name={['parameters', 'timeWindowUnit']} label="Unit" style={{ flex: 1 }} rules={[{ required: true }]}>
-                                    <Select>
-                                        <Select.Option value="Seconds">Seconds</Select.Option>
-                                        <Select.Option value="Minutes">Minutes</Select.Option>
-                                        <Select.Option value="Hours">Hours</Select.Option>
-                                    </Select>
-                                </Form.Item>
-                            </div>
-                        </>
+                            <Form.Item name="timeWindowMinutes" label="Time Window (Mins)" style={{ flex: 1 }} rules={[{ required: true }]}>
+                                <InputNumber style={{ width: '100%' }} min={1} precision={0} />
+                            </Form.Item>
+                        </div>
                     )}
 
                     {currentType === 'DAILY_LIMIT' && (
-                        <Form.Item name={['parameters', 'dailyLimit']} label="Daily Limit ($)" rules={[{ required: true }]}>
-                            <InputNumber style={{ width: '100%' }} />
+                        <Form.Item name="dailyLimitAmount" label="Daily Limit Amount" rules={[{ required: true, message: 'Please enter daily limit' }]}>
+                            <InputNumber style={{ width: '100%' }} min={0} precision={2} />
                         </Form.Item>
                     )}
 
-                    <Form.Item name="enabled" label="Status" valuePropName="checked">
-                        <Switch checkedChildren="Enabled" unCheckedChildren="Disabled" />
-                    </Form.Item>
+                    {!editingRule && (
+                        <Form.Item name="enabled" label="Initial Status" valuePropName="checked">
+                            <Switch checkedChildren="Enabled" unCheckedChildren="Disabled" />
+                        </Form.Item>
+                    )}
                 </Form>
             </Drawer>
         </div>
