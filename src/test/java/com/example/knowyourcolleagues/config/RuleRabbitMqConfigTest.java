@@ -68,7 +68,7 @@ class RuleRabbitMqConfigTest {
         RuleRabbitMqConfig config = new RuleRabbitMqConfig();
         DirectExchange exchange = config.ruleEvaluationResultsExchange();
         Queue queue = config.transactionStatusUpdateQueue();
-        Binding binding = config.transactionEvaluationResultBinding(
+        Binding binding = config.transactionStatusUpdateBinding(
                 queue,
                 exchange
         );
