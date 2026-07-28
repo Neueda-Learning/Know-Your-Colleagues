@@ -68,11 +68,17 @@ const LEVEL_COLOR = {
 };
 
 export default function NotificationCenter({ onNavigate }) {
-  const [notificationApi, contextHolder] = notification.useNotification();
+  const [notificationApi, contextHolder] = notification.useNotification({
+    placement: "bottomRight",
+    maxCount: 3,
+    stack: { threshold: 3 },
+  });
   const [items, setItems] = useState(loadStoredNotifications);
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [connectionState, setConnectionState] = useState("CONNECTING");
   const navigateRef = useRef(onNavigate);
+  const incomingHandlerRef = useRef(null);
+  const socketRef = useRef(null);
 
   useEffect(() => {
     navigateRef.current = onNavigate;
@@ -101,8 +107,7 @@ export default function NotificationCenter({ onNavigate }) {
       key: item.id,
       message: item.title,
       description: item.message,
-      duration: item.level === "CRITICAL" ? 0 : item.level === "WARNING" ? 8 : 4.5,
-      placement: "topRight",
+      duration: item.level === "CRITICAL" ? 10 : item.level === "WARNING" ? 8 : 4.5,
       onClick: () => openTarget(item),
       style: { cursor: item.action ? "pointer" : "default" },
     };
@@ -124,36 +129,60 @@ export default function NotificationCenter({ onNavigate }) {
   }, [replaceItems, showToast]);
 
   useEffect(() => {
-    let socket;
+    incomingHandlerRef.current = handleIncoming;
+  }, [handleIncoming]);
+
+  useEffect(() => {
     let reconnectTimer;
+    let initialConnectTimer;
     let stopped = false;
 
     const connect = () => {
       if (stopped) return;
       setConnectionState("CONNECTING");
-      socket = new WebSocket(resolveWebSocketUrl());
-      socket.onopen = () => setConnectionState("CONNECTED");
+
+      let socket;
+      try {
+        socket = new WebSocket(resolveWebSocketUrl());
+      } catch {
+        setConnectionState("DISCONNECTED");
+        reconnectTimer = window.setTimeout(connect, 3_000);
+        return;
+      }
+
+      socketRef.current = socket;
+      socket.onopen = () => {
+        if (socketRef.current === socket) setConnectionState("CONNECTED");
+      };
       socket.onmessage = (event) => {
         try {
-          handleIncoming(JSON.parse(event.data));
+          incomingHandlerRef.current?.(JSON.parse(event.data));
         } catch {
           // Ignore malformed messages and keep the live connection available.
         }
       };
-      socket.onerror = () => setConnectionState("DISCONNECTED");
+      socket.onerror = () => {
+        if (socketRef.current === socket) setConnectionState("DISCONNECTED");
+      };
       socket.onclose = () => {
+        if (socketRef.current !== socket) return;
+        socketRef.current = null;
         setConnectionState("DISCONNECTED");
         if (!stopped) reconnectTimer = window.setTimeout(connect, 3_000);
       };
     };
 
-    connect();
+    // Avoid opening the StrictMode development probe connection.
+    initialConnectTimer = window.setTimeout(connect, 0);
     return () => {
       stopped = true;
+      window.clearTimeout(initialConnectTimer);
       window.clearTimeout(reconnectTimer);
-      socket?.close();
+      const currentSocket = socketRef.current;
+      socketRef.current = null;
+      currentSocket?.close(1000, "Notification center unmounted");
     };
-  }, [handleIncoming]);
+  }, []);
 
   const unreadCount = useMemo(
     () => items.filter((item) => !item.read).length,
@@ -166,6 +195,11 @@ export default function NotificationCenter({ onNavigate }) {
 
   const clearAll = () => replaceItems(() => []);
 
+  const handlePopoverOpenChange = (open) => {
+    setPopoverOpen(open);
+    if (open) notificationApi.destroy();
+  };
+
   const content = (
     <div style={{ width: 360, maxWidth: "calc(100vw - 32px)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -175,10 +209,22 @@ export default function NotificationCenter({ onNavigate }) {
         </div>
         <Space size={4}>
           <Tooltip title="Mark all as read">
-            <Button type="text" size="small" icon={<CheckCheck size={15} />} onClick={markAllRead} />
+            <Button
+              type="text"
+              size="small"
+              aria-label="Mark all as read"
+              icon={<CheckCheck size={15} />}
+              onClick={markAllRead}
+            />
           </Tooltip>
           <Tooltip title="Clear notifications">
-            <Button type="text" size="small" icon={<Trash2 size={15} />} onClick={clearAll} />
+            <Button
+              type="text"
+              size="small"
+              aria-label="Clear notifications"
+              icon={<Trash2 size={15} />}
+              onClick={clearAll}
+            />
           </Tooltip>
         </Space>
       </div>
@@ -238,7 +284,7 @@ export default function NotificationCenter({ onNavigate }) {
           trigger="click"
           placement="bottomRight"
           open={popoverOpen}
-          onOpenChange={setPopoverOpen}
+          onOpenChange={handlePopoverOpenChange}
           content={content}
         >
           <Badge count={unreadCount} size="small" overflowCount={99}>
