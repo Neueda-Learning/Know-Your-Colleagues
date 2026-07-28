@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.knowyourcolleagues.bizexception.rule.InvalidRuleRequestException;
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
 import com.example.knowyourcolleagues.dto.CreateAlertCommand;
+import com.example.knowyourcolleagues.dto.AlertResponse;
+import com.example.knowyourcolleagues.dto.RuleEngineResult;
 import com.example.knowyourcolleagues.dto.RuleEvaluationResult;
 import com.example.knowyourcolleagues.entity.Rule;
 import com.example.knowyourcolleagues.entity.Transaction;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.ArrayList;
 
 @Service
 @RequiredArgsConstructor
@@ -30,7 +33,7 @@ public class RuleEngineServiceImpl implements RuleEngineService {
 
     @Override
     @Transactional
-    public void evaluateTransaction(Long transactionId) {
+    public RuleEngineResult evaluateTransaction(Long transactionId) {
         if (transactionId == null || transactionId <= 0) {
             throw new InvalidRuleRequestException(
                     "transactionId must be positive"
@@ -43,9 +46,15 @@ public class RuleEngineServiceImpl implements RuleEngineService {
             );
         }
         if (transaction.getStatus() != TransactionStatus.COMPLETED) {
-            return;
+            return RuleEngineResult.of(
+                    transaction.getId(),
+                    List.of(),
+                    List.of()
+            );
         }
 
+        List<Long> matchedRuleIds = new ArrayList<>();
+        List<Long> alertIds = new ArrayList<>();
         List<Rule> rules = ruleMapper.selectList(
                 new LambdaQueryWrapper<Rule>()
                         .eq(Rule::getEnabled, Boolean.TRUE)
@@ -56,11 +65,18 @@ public class RuleEngineServiceImpl implements RuleEngineService {
                     .get(rule.getType())
                     .evaluate(rule, transaction);
             if (result.isMatched()) {
-                alertService.createAlert(
+                AlertResponse alert = alertService.createAlert(
                         toAlertCommand(rule, transaction, result)
                 );
+                matchedRuleIds.add(rule.getId());
+                alertIds.add(alert.getId());
             }
         }
+        return RuleEngineResult.of(
+                transaction.getId(),
+                matchedRuleIds,
+                alertIds
+        );
     }
 
     private CreateAlertCommand toAlertCommand(

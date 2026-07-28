@@ -15,6 +15,12 @@ public class RuleRabbitMqConfig {
     public static final String TRANSACTION_RECORDED_KEY =
             "transaction.recorded";
     public static final String RULE_EVALUATION_QUEUE = "rule.evaluation";
+    public static final String RULE_EVALUATION_RESULTS_EXCHANGE =
+            "rule.evaluation.results";
+    public static final String TRANSACTION_EVALUATED_KEY =
+            "transaction.evaluated";
+    public static final String TRANSACTION_STATUS_UPDATE_QUEUE =
+            "transaction.status.update";
 
     /**
      * 使用 JSON 传递交易事件，确保包含交易列表的复杂对象可以被消费者反序列化。
@@ -44,5 +50,29 @@ public class RuleRabbitMqConfig {
         return BindingBuilder.bind(ruleEvaluationQueue)
                 .to(transactionEventsExchange)
                 .with(TRANSACTION_RECORDED_KEY);
+    }
+
+    @Bean
+    DirectExchange ruleEvaluationResultsExchange() {
+        return new DirectExchange(
+                RULE_EVALUATION_RESULTS_EXCHANGE,
+                true,
+                false
+        );
+    }
+
+    @Bean
+    Queue transactionStatusUpdateQueue() {
+        return new Queue(TRANSACTION_STATUS_UPDATE_QUEUE, true);
+    }
+
+    @Bean
+    Binding transactionEvaluationResultBinding(
+            Queue transactionStatusUpdateQueue,
+            DirectExchange ruleEvaluationResultsExchange
+    ) {
+        return BindingBuilder.bind(transactionStatusUpdateQueue)
+                .to(ruleEvaluationResultsExchange)
+                .with(TRANSACTION_EVALUATED_KEY);
     }
 }

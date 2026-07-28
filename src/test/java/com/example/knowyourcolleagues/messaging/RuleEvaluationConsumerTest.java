@@ -1,6 +1,7 @@
 package com.example.knowyourcolleagues.messaging;
 
 import com.example.knowyourcolleagues.bizexception.rule.InvalidRuleRequestException;
+import com.example.knowyourcolleagues.dto.RuleEngineResult;
 import com.example.knowyourcolleagues.dto.TransactionRecordedEvent;
 import com.example.knowyourcolleagues.dto.TransactionResponse;
 import com.example.knowyourcolleagues.service.RuleEngineService;
@@ -20,18 +21,32 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class RuleEvaluationConsumerTest {
 
     @Mock
     private RuleEngineService ruleEngineService;
 
+    @Mock
+    private RuleEvaluationResultPublisher resultPublisher;
+
     private RuleEvaluationConsumer consumer;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        consumer = new RuleEvaluationConsumer(ruleEngineService);
+        consumer = new RuleEvaluationConsumer(
+                ruleEngineService,
+                resultPublisher
+        );
+        when(ruleEngineService.evaluateTransaction(
+                org.mockito.ArgumentMatchers.anyLong()
+        )).thenAnswer(invocation -> RuleEngineResult.of(
+                invocation.getArgument(0),
+                List.of(),
+                List.of()
+        ));
     }
 
     @Test
@@ -51,6 +66,14 @@ class RuleEvaluationConsumerTest {
         order.verify(ruleEngineService).evaluateTransaction(1002L);
         verify(ruleEngineService, times(1))
                 .evaluateTransaction(1001L);
+        verify(resultPublisher).publish(
+                event.getEventId(),
+                RuleEngineResult.of(1001L, List.of(), List.of())
+        );
+        verify(resultPublisher).publish(
+                event.getEventId(),
+                RuleEngineResult.of(1002L, List.of(), List.of())
+        );
     }
 
     @Test
@@ -61,6 +84,10 @@ class RuleEvaluationConsumerTest {
         consumer.consume(event);
 
         verify(ruleEngineService).evaluateTransaction(2001L);
+        verify(resultPublisher).publish(
+                event.getEventId(),
+                RuleEngineResult.of(2001L, List.of(), List.of())
+        );
     }
 
     @Test
@@ -71,7 +98,7 @@ class RuleEvaluationConsumerTest {
                 .isInstanceOf(InvalidRuleRequestException.class)
                 .hasMessageContaining("no valid transaction");
 
-        verifyNoInteractions(ruleEngineService);
+        verifyNoInteractions(ruleEngineService, resultPublisher);
     }
 
     @Test
@@ -83,7 +110,7 @@ class RuleEvaluationConsumerTest {
                 .isInstanceOf(InvalidRuleRequestException.class)
                 .hasMessageContaining("invalid transaction");
 
-        verifyNoInteractions(ruleEngineService);
+        verifyNoInteractions(ruleEngineService, resultPublisher);
     }
 
     @Test
@@ -96,7 +123,7 @@ class RuleEvaluationConsumerTest {
                 .isInstanceOf(InvalidRuleRequestException.class)
                 .hasMessageContaining("incomplete");
 
-        verifyNoInteractions(ruleEngineService);
+        verifyNoInteractions(ruleEngineService, resultPublisher);
     }
 
     @Test
@@ -110,6 +137,7 @@ class RuleEvaluationConsumerTest {
         assertThatThrownBy(() -> consumer.consume(event))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("evaluation failed");
+        verifyNoInteractions(resultPublisher);
     }
 
     private TransactionRecordedEvent validEvent() {

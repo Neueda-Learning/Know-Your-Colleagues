@@ -1,6 +1,8 @@
 package com.example.knowyourcolleagues.service;
 
+import com.example.knowyourcolleagues.dto.RuleEngineResult;
+
 public interface RuleEngineService {
 
-    void evaluateTransaction(Long transactionId);
+    RuleEngineResult evaluateTransaction(Long transactionId);
 }
