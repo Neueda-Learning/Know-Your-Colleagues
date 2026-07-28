@@ -52,13 +52,14 @@ const SEVERITY_COLORS = {
 };
 
 export default function MonitoringRulesPage() {
+    // 保存变化的数据并渲染页面
     const [rules, setRules] = useState(INITIAL_RULES);
     const [keyword, setKeyword] = useState('');
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editingRule, setEditingRule] = useState(null);
     const [form] = Form.useForm();
 
-    // 模糊搜索过滤
+    // 模糊搜索过滤  "搜索匹配条件的规则"
     const filteredData = useMemo(() => {
         const q = keyword.trim().toLowerCase();
         if (!q) return rules;
@@ -70,7 +71,7 @@ export default function MonitoringRulesPage() {
         );
     }, [rules, keyword]);
 
-    // 格式化参数显示
+    // 格式化参数显示，转换成用户能看懂的文字，显示在页面表格里
     const formatParameters = (rule) => {
         switch (rule.type) {
             case 'AMOUNT_THRESHOLD':
@@ -98,7 +99,7 @@ export default function MonitoringRulesPage() {
 
     // 打开新建抽屉
     const handleAddNew = () => {
-        setEditingRule(null);
+        setEditingRule(null);  // 清空当前编辑对象，创建新规则
         form.resetFields();
         form.setFieldsValue({
             name: 'New Rule',
@@ -107,7 +108,7 @@ export default function MonitoringRulesPage() {
             enabled: true,
             parameters: { threshold: 1000 },
         });
-        setIsDrawerOpen(true);
+        setIsDrawerOpen(true); // 打开抽屉
     };
 
     // 打开编辑抽屉
@@ -120,23 +121,23 @@ export default function MonitoringRulesPage() {
     // 保存规则
     const handleSave = async () => {
         try {
-            const values = await form.validateFields();
-            if (editingRule) {
-                setRules((prev) => prev.map((r) => (r.key === editingRule.key ? { ...r, ...values } : r)));
-            } else {
+            const values = await form.validateFields(); // 把用户填写的数据拿出来
+            if (editingRule) { // 有没有正在编辑的规则
+                setRules((prev) => prev.map((r) => (r.key === editingRule.key ? { ...r, ...values } : r))); // 编辑旧规则
+            } else {  // 新增新规则
                 const newRule = {
                     ...values,
                     key: `rule-${Date.now()}`,
                 };
-                setRules((prev) => [...prev, newRule]);
+                setRules((prev) => [...prev, newRule]);  // 添加到规则数组
             }
-            setIsDrawerOpen(false);
+            setIsDrawerOpen(false);  // 关闭右侧窗口
         } catch (error) {
             console.error('Validation failed:', error);
         }
     };
 
-    const columns = [
+    const columns = [  // 表格列配置
         {
             title: 'Rule Name',
             dataIndex: 'name',
@@ -193,7 +194,7 @@ export default function MonitoringRulesPage() {
         },
     ];
 
-    const currentType = Form.useWatch('type', form);
+    const currentType = Form.useWatch('type', form); // 实时监听表单里面 type 这个字段的变化
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -226,7 +227,7 @@ export default function MonitoringRulesPage() {
                 />
             </div>
 
-            {/* 编辑/新建抽屉 */}
+            {/* 编辑/新建抽屉/右侧弹窗 */}
             <Drawer
                 title={
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
