@@ -41,9 +41,8 @@ public class RuleEvaluationConsumer {
 
         Set<Long> transactionIds = extractTransactionIds(event);
         for (Long transactionId : transactionIds) {
-            RuleEngineResult result =
-                    ruleEngineService.evaluateTransaction(transactionId);
-            resultPublisher.publish(event.getEventId(), result);
+            ruleEngineService.evaluateTransaction(transactionId)
+                    .ifPresent(result -> publishResult(event, result));
         }
 
         log.info(
@@ -52,6 +51,13 @@ public class RuleEvaluationConsumer {
                 event.getEventId(),
                 transactionIds.size()
         );
+    }
+
+    private void publishResult(
+            TransactionRecordedEvent sourceEvent,
+            RuleEngineResult result
+    ) {
+        resultPublisher.publish(sourceEvent.getEventId(), result);
     }
 
     private Set<Long> extractTransactionIds(

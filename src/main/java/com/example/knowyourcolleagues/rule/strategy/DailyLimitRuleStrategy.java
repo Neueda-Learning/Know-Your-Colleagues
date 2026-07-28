@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -40,22 +41,28 @@ public class DailyLimitRuleStrategy implements RuleEvaluationStrategy {
         LocalDateTime start = transaction.getTransactionTime()
                 .toLocalDate()
                 .atStartOfDay();
-        List<Transaction> transactions = transactionMapper.selectList(
-                new LambdaQueryWrapper<Transaction>()
-                        .eq(Transaction::getAccountId,
-                                transaction.getAccountId())
-                        .eq(Transaction::getCurrency,
-                                transaction.getCurrency())
-                        .eq(Transaction::getTransactionType,
-                                TransactionType.DEBIT)
-                        .eq(Transaction::getStatus,
-                                TransactionStatus.COMPLETED)
-                        .ge(Transaction::getTransactionTime, start)
-                        .le(Transaction::getTransactionTime,
-                                transaction.getTransactionTime())
-                        .orderByAsc(Transaction::getTransactionTime)
-                        .orderByAsc(Transaction::getId)
-        ).stream().filter(item -> isNotAfter(item, transaction)).toList();
+        List<Transaction> transactions = new ArrayList<>(
+                transactionMapper.selectList(
+                        new LambdaQueryWrapper<Transaction>()
+                                .eq(Transaction::getAccountId,
+                                        transaction.getAccountId())
+                                .eq(Transaction::getCurrency,
+                                        transaction.getCurrency())
+                                .eq(Transaction::getTransactionType,
+                                        TransactionType.DEBIT)
+                                .in(Transaction::getStatus,
+                                        TransactionStatus.NORMAL,
+                                        TransactionStatus.ABNORMAL)
+                                .ge(Transaction::getTransactionTime, start)
+                                .le(Transaction::getTransactionTime,
+                                        transaction.getTransactionTime())
+                                .orderByAsc(Transaction::getTransactionTime)
+                                .orderByAsc(Transaction::getId)
+                ).stream()
+                        .filter(item -> isNotAfter(item, transaction))
+                        .toList()
+        );
+        transactions.add(transaction);
 
         BigDecimal currentTotal = transactions.stream()
                 .map(Transaction::getAmount)
@@ -70,7 +77,7 @@ public class DailyLimitRuleStrategy implements RuleEvaluationStrategy {
 
         return RuleEvaluationResult.matched(
                 "Daily transaction limit exceeded",
-                "Daily completed debit total " + currentTotal + " "
+                "Daily evaluated debit total " + currentTotal + " "
                         + transaction.getCurrency() + " exceeded limit "
                         + rule.getDailyLimitAmount(),
                 transactions.stream().map(Transaction::getId).toList()

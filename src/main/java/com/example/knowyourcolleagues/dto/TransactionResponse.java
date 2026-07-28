@@ -39,7 +39,7 @@ public class TransactionResponse {
     @Schema(description = "交易类型", example = "DEBIT")
     private TransactionType transactionType;
 
-    @Schema(description = "交易状态", example = "COMPLETED")
+    @Schema(description = "交易状态", example = "PENDING")
     private TransactionStatus status;
 
     @Schema(description = "交易描述", example = "Supplier payment")

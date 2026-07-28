@@ -14,6 +14,7 @@ import org.mockito.MockitoAnnotations;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
@@ -27,6 +28,8 @@ class RuleEvaluationConsumerTest {
 
     @Mock
     private RuleEngineService ruleEngineService;
+    @Mock
+    private RuleEvaluationResultPublisher resultPublisher;
 
     @Mock
     private RuleEvaluationResultPublisher resultPublisher;
@@ -40,13 +43,6 @@ class RuleEvaluationConsumerTest {
                 ruleEngineService,
                 resultPublisher
         );
-        when(ruleEngineService.evaluateTransaction(
-                org.mockito.ArgumentMatchers.anyLong()
-        )).thenAnswer(invocation -> RuleEngineResult.of(
-                invocation.getArgument(0),
-                List.of(),
-                List.of()
-        ));
     }
 
     @Test
@@ -58,6 +54,20 @@ class RuleEvaluationConsumerTest {
                 transaction(1002L),
                 transaction(1001L)
         ));
+        RuleEngineResult firstResult = RuleEngineResult.of(
+                1001L,
+                List.of(),
+                List.of()
+        );
+        RuleEngineResult secondResult = RuleEngineResult.of(
+                1002L,
+                List.of(5L),
+                List.of(9L)
+        );
+        when(ruleEngineService.evaluateTransaction(1001L))
+                .thenReturn(Optional.of(firstResult));
+        when(ruleEngineService.evaluateTransaction(1002L))
+                .thenReturn(Optional.of(secondResult));
 
         consumer.consume(event);
 
@@ -66,28 +76,26 @@ class RuleEvaluationConsumerTest {
         order.verify(ruleEngineService).evaluateTransaction(1002L);
         verify(ruleEngineService, times(1))
                 .evaluateTransaction(1001L);
-        verify(resultPublisher).publish(
-                event.getEventId(),
-                RuleEngineResult.of(1001L, List.of(), List.of())
-        );
-        verify(resultPublisher).publish(
-                event.getEventId(),
-                RuleEngineResult.of(1002L, List.of(), List.of())
-        );
+        verify(resultPublisher).publish(event.getEventId(), firstResult);
+        verify(resultPublisher).publish(event.getEventId(), secondResult);
     }
 
     @Test
     void shouldSupportLegacyEventWithOnlyTransactionId() {
         TransactionRecordedEvent event = validEvent();
         event.setTransactionId(2001L);
+        RuleEngineResult result = RuleEngineResult.of(
+                2001L,
+                List.of(),
+                List.of()
+        );
+        when(ruleEngineService.evaluateTransaction(2001L))
+                .thenReturn(Optional.of(result));
 
         consumer.consume(event);
 
         verify(ruleEngineService).evaluateTransaction(2001L);
-        verify(resultPublisher).publish(
-                event.getEventId(),
-                RuleEngineResult.of(2001L, List.of(), List.of())
-        );
+        verify(resultPublisher).publish(event.getEventId(), result);
     }
 
     @Test
@@ -98,7 +106,8 @@ class RuleEvaluationConsumerTest {
                 .isInstanceOf(InvalidRuleRequestException.class)
                 .hasMessageContaining("no valid transaction");
 
-        verifyNoInteractions(ruleEngineService, resultPublisher);
+        verifyNoInteractions(ruleEngineService);
+        verifyNoInteractions(resultPublisher);
     }
 
     @Test
@@ -110,7 +119,8 @@ class RuleEvaluationConsumerTest {
                 .isInstanceOf(InvalidRuleRequestException.class)
                 .hasMessageContaining("invalid transaction");
 
-        verifyNoInteractions(ruleEngineService, resultPublisher);
+        verifyNoInteractions(ruleEngineService);
+        verifyNoInteractions(resultPublisher);
     }
 
     @Test
@@ -123,7 +133,21 @@ class RuleEvaluationConsumerTest {
                 .isInstanceOf(InvalidRuleRequestException.class)
                 .hasMessageContaining("incomplete");
 
-        verifyNoInteractions(ruleEngineService, resultPublisher);
+        verifyNoInteractions(ruleEngineService);
+        verifyNoInteractions(resultPublisher);
+    }
+
+    @Test
+    void shouldNotPublishResultForAlreadyEvaluatedTransaction() {
+        TransactionRecordedEvent event = validEvent();
+        event.setTransactionId(2001L);
+        when(ruleEngineService.evaluateTransaction(2001L))
+                .thenReturn(Optional.empty());
+
+        consumer.consume(event);
+
+        verify(ruleEngineService).evaluateTransaction(2001L);
+        verifyNoInteractions(resultPublisher);
     }
 
     @Test

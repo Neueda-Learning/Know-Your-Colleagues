@@ -41,7 +41,7 @@ public class TransactionController {
 
     @Operation(
             summary = "创建单笔交易",
-            description = "同步保存一笔交易；数据库事务提交成功后，将包含该交易的列表事件发布到 RabbitMQ。"
+            description = "同步保存一笔 PENDING 交易；数据库事务提交成功后，将包含该交易的列表事件发布到 RabbitMQ。"
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "交易创建成功"),
@@ -66,7 +66,6 @@ public class TransactionController {
                                       "amount": 15000.00,
                                       "currency": "USD",
                                       "transactionType": "DEBIT",
-                                      "status": "COMPLETED",
                                       "description": "Supplier payment",
                                       "transactionTime": "2026-07-27T14:30:00"
                                     }

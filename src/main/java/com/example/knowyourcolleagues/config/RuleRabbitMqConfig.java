@@ -5,6 +5,7 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -38,21 +39,6 @@ public class RuleRabbitMqConfig {
     }
 
     @Bean
-    Queue ruleEvaluationQueue() {
-        return new Queue(RULE_EVALUATION_QUEUE, true);
-    }
-
-    @Bean
-    Binding ruleEvaluationBinding(
-            Queue ruleEvaluationQueue,
-            DirectExchange transactionEventsExchange
-    ) {
-        return BindingBuilder.bind(ruleEvaluationQueue)
-                .to(transactionEventsExchange)
-                .with(TRANSACTION_RECORDED_KEY);
-    }
-
-    @Bean
     DirectExchange ruleEvaluationResultsExchange() {
         return new DirectExchange(
                 RULE_EVALUATION_RESULTS_EXCHANGE,
@@ -62,13 +48,31 @@ public class RuleRabbitMqConfig {
     }
 
     @Bean
+    Queue ruleEvaluationQueue() {
+        return new Queue(RULE_EVALUATION_QUEUE, true);
+    }
+
+    @Bean
     Queue transactionStatusUpdateQueue() {
         return new Queue(TRANSACTION_STATUS_UPDATE_QUEUE, true);
     }
 
     @Bean
-    Binding transactionEvaluationResultBinding(
+    Binding ruleEvaluationBinding(
+            @Qualifier("ruleEvaluationQueue") Queue ruleEvaluationQueue,
+            @Qualifier("transactionEventsExchange")
+            DirectExchange transactionEventsExchange
+    ) {
+        return BindingBuilder.bind(ruleEvaluationQueue)
+                .to(transactionEventsExchange)
+                .with(TRANSACTION_RECORDED_KEY);
+    }
+
+    @Bean
+    Binding transactionStatusUpdateBinding(
+            @Qualifier("transactionStatusUpdateQueue")
             Queue transactionStatusUpdateQueue,
+            @Qualifier("ruleEvaluationResultsExchange")
             DirectExchange ruleEvaluationResultsExchange
     ) {
         return BindingBuilder.bind(transactionStatusUpdateQueue)

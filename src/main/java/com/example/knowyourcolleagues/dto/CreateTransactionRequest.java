@@ -1,6 +1,5 @@
 package com.example.knowyourcolleagues.dto;
 
-import com.example.knowyourcolleagues.enums.TransactionStatus;
 import com.example.knowyourcolleagues.enums.TransactionType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
@@ -43,9 +42,6 @@ public class CreateTransactionRequest {
     @NotNull
     @Schema(description = "交易类型", example = "DEBIT")
     private TransactionType transactionType;
-
-    @Schema(description = "交易状态；不传时默认为 COMPLETED", example = "COMPLETED")
-    private TransactionStatus status;
 
     @Size(max = 500)
     @Schema(description = "交易描述或附言", example = "Supplier payment")

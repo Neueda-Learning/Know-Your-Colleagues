@@ -19,8 +19,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -33,7 +34,7 @@ public class RuleEngineServiceImpl implements RuleEngineService {
 
     @Override
     @Transactional
-    public RuleEngineResult evaluateTransaction(Long transactionId) {
+    public Optional<RuleEngineResult> evaluateTransaction(Long transactionId) {
         if (transactionId == null || transactionId <= 0) {
             throw new InvalidRuleRequestException(
                     "transactionId must be positive"
@@ -45,12 +46,8 @@ public class RuleEngineServiceImpl implements RuleEngineService {
                     "Transaction not found: " + transactionId
             );
         }
-        if (transaction.getStatus() != TransactionStatus.COMPLETED) {
-            return RuleEngineResult.of(
-                    transaction.getId(),
-                    List.of(),
-                    List.of()
-            );
+        if (transaction.getStatus() != TransactionStatus.PENDING) {
+            return Optional.empty();
         }
 
         List<Long> matchedRuleIds = new ArrayList<>();
@@ -60,6 +57,8 @@ public class RuleEngineServiceImpl implements RuleEngineService {
                         .eq(Rule::getEnabled, Boolean.TRUE)
                         .orderByAsc(Rule::getId)
         );
+        List<Long> matchedRuleIds = new ArrayList<>();
+        List<Long> alertIds = new ArrayList<>();
         for (Rule rule : rules) {
             RuleEvaluationResult result = strategyRegistry
                     .get(rule.getType())
@@ -72,11 +71,11 @@ public class RuleEngineServiceImpl implements RuleEngineService {
                 alertIds.add(alert.getId());
             }
         }
-        return RuleEngineResult.of(
-                transaction.getId(),
+        return Optional.of(RuleEngineResult.of(
+                transactionId,
                 matchedRuleIds,
                 alertIds
-        );
+        ));
     }
 
     private CreateAlertCommand toAlertCommand(
