@@ -8,6 +8,7 @@ import com.example.knowyourcolleagues.bizexception.transaction.TransactionRefere
 import com.example.knowyourcolleagues.dto.CreateTransactionRequest;
 import com.example.knowyourcolleagues.dto.TransactionPageResponse;
 import com.example.knowyourcolleagues.dto.TransactionQueryRequest;
+import com.example.knowyourcolleagues.dto.TransactionRecordedEvent;
 import com.example.knowyourcolleagues.dto.TransactionResponse;
 import com.example.knowyourcolleagues.entity.Transaction;
 import com.example.knowyourcolleagues.enums.TransactionStatus;
@@ -23,9 +24,9 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import com.example.knowyourcolleagues.dto.TransactionRecordedEvent;
 
 /**
  * 交易业务服务实现。
@@ -68,13 +69,16 @@ public class TransactionServiceImpl implements TransactionService {
 
         insertWithGeneratedReference(transaction, now);
 
+        TransactionResponse response = toResponse(transaction);
+
         TransactionRecordedEvent event = new TransactionRecordedEvent();
         event.setEventId(UUID.randomUUID());
         event.setTransactionId(transaction.getId());
+        event.setTransactions(List.of(response));
         event.setOccurredAt(clock.instant());
         applicationEventPublisher.publishEvent(event);
 
-        return toResponse(transaction);
+        return response;
     }
 
     @Override

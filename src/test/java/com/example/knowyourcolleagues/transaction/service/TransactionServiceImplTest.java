@@ -8,6 +8,7 @@ import com.example.knowyourcolleagues.bizexception.transaction.TransactionRefere
 import com.example.knowyourcolleagues.dto.CreateTransactionRequest;
 import com.example.knowyourcolleagues.dto.TransactionPageResponse;
 import com.example.knowyourcolleagues.dto.TransactionQueryRequest;
+import com.example.knowyourcolleagues.dto.TransactionRecordedEvent;
 import com.example.knowyourcolleagues.dto.TransactionResponse;
 import com.example.knowyourcolleagues.entity.Transaction;
 import com.example.knowyourcolleagues.enums.TransactionStatus;
@@ -81,6 +82,20 @@ class TransactionServiceImplTest {
         assertThat(inserted.getTransactionTime()).isNotNull();
         assertThat(inserted.getCreatedAt()).isNotNull();
         assertThat(response.getId()).isEqualTo(1001L);
+
+        ArgumentCaptor<Object> eventCaptor =
+                ArgumentCaptor.forClass(Object.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue())
+                .isInstanceOf(TransactionRecordedEvent.class);
+
+        TransactionRecordedEvent event =
+                (TransactionRecordedEvent) eventCaptor.getValue();
+        assertThat(event.getTransactionId()).isEqualTo(1001L);
+        assertThat(event.getTransactions()).singleElement()
+                .extracting(TransactionResponse::getId)
+                .isEqualTo(1001L);
+        assertThat(event.getOccurredAt()).isNotNull();
     }
 
     @Test

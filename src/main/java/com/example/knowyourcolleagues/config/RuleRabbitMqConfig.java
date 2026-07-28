@@ -4,21 +4,27 @@ import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnProperty(
-        name = "rule.messaging.enabled",
-        havingValue = "true"
-)
 public class RuleRabbitMqConfig {
 
     public static final String TRANSACTION_EXCHANGE = "transaction.events";
     public static final String TRANSACTION_RECORDED_KEY =
             "transaction.recorded";
     public static final String RULE_EVALUATION_QUEUE = "rule.evaluation";
+
+    /**
+     * 使用 JSON 传递交易事件，确保包含交易列表的复杂对象可以被消费者反序列化。
+     */
+    @Bean
+    JacksonJsonMessageConverter rabbitJsonMessageConverter() {
+        return new JacksonJsonMessageConverter(
+                "com.example.knowyourcolleagues.dto"
+        );
+    }
 
     @Bean
     DirectExchange transactionEventsExchange() {

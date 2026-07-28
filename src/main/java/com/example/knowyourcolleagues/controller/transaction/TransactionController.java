@@ -41,7 +41,7 @@ public class TransactionController {
 
     @Operation(
             summary = "创建单笔交易",
-            description = "同步保存一笔交易；当前版本不会向 RabbitMQ 发布消息。"
+            description = "同步保存一笔交易；数据库事务提交成功后，将包含该交易的列表事件发布到 RabbitMQ。"
     )
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "交易创建成功"),
