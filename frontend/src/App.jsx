@@ -3,7 +3,7 @@ import Sidebar from "./components/Sidebar";
 import TransactionsPage from "./pages/TransactionsPage";
 import MonitoringRules from "./pages/MonitoringRules.jsx";
 import AlertsPage from "./pages/AlertsPage";
-import DashboardPage from "./pages/DashboardPage";
+import DashboardPage from "./pages/DashBoardPage";
 import { COLORS, NAV_ITEMS } from "./constants/theme";
 import "./App.css";
 
@@ -15,14 +15,13 @@ export default function App() {
   const renderPage = () => {
     switch (active) {
       case "dashboard":
-        return <DashboardPage/>;
+        return <DashboardPage />;
       case "transactions":
         return <TransactionsPage />;
       case "monitor":
         return <MonitoringRules />;
       case "alerts":
         return <AlertsPage />;
-
       default:
         return null;
     }
@@ -33,10 +32,15 @@ export default function App() {
       <Sidebar active={active} onChange={setActive} />
 
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-
         <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 600, color: COLORS.ink, margin: "0 0 16px" }}>{pageTitle}</h1>
-          {renderPage()}
+          {active === "transactions" ? (
+            renderPage()
+          ) : (
+            <>
+              <h1 style={{ fontSize: 18, fontWeight: 600, color: COLORS.ink, margin: "0 0 16px" }}>{pageTitle}</h1>
+              {renderPage()}
+            </>
+          )}
         </div>
       </main>
     </div>
