@@ -13,6 +13,7 @@ public interface RuleService {
     RuleResponse createRule(CreateRuleRequest request);
 
     RulePageResponse getRules(
+            String keyword,
             RuleType type,
             Boolean enabled,
             Severity severity,
@@ -21,6 +22,8 @@ public interface RuleService {
     );
 
     RuleResponse getRule(Long ruleId);
+
+    void deleteRule(Long ruleId);
 
     RuleResponse updateRule(Long ruleId, UpdateRuleRequest request);
 

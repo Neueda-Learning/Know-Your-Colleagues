@@ -8,6 +8,7 @@ import com.example.knowyourcolleagues.bizexception.transaction.InvalidTransactio
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionReferenceGenerationException;
 import com.example.knowyourcolleagues.bizexception.rule.ConcurrentRuleUpdateException;
+import com.example.knowyourcolleagues.bizexception.rule.RuleDeletionConflictException;
 import com.example.knowyourcolleagues.bizexception.rule.InvalidRuleRequestException;
 import com.example.knowyourcolleagues.bizexception.rule.RuleNotFoundException;
 import com.example.knowyourcolleagues.bizexception.rule.UnsupportedRuleTypeException;
@@ -39,7 +40,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({
-            ConcurrentRuleUpdateException.class
+            ConcurrentRuleUpdateException.class,
+            RuleDeletionConflictException.class
     })
     public ResponseEntity<ErrorResponse> handleRuleConflict(
             RuntimeException exception,
@@ -47,7 +49,9 @@ public class GlobalExceptionHandler {
     ) {
         return buildResponse(
                 HttpStatus.CONFLICT,
-                "RULE_CONCURRENT_UPDATE",
+                exception instanceof RuleDeletionConflictException
+                        ? "RULE_DELETE_CONFLICT"
+                        : "RULE_CONCURRENT_UPDATE",
                 exception.getMessage(),
                 request
         );
