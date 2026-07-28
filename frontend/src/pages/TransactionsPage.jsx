@@ -28,6 +28,7 @@ import {
 } from "../constants/mockData";
 import { fetchTransactions, fetchTransaction, createTransaction } from "../api/transactions";
 import { REALTIME_EVENT_NAME } from "../components/NotificationCenter";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 
 const { RangePicker } = DatePicker;
 
@@ -200,8 +201,8 @@ export default function TransactionsPage({ focusTransactionId, focusRequestId })
     setPage(0);
   };
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const idInput = applied.transactionId.trim();
 
@@ -260,17 +261,23 @@ export default function TransactionsPage({ focusTransactionId, focusRequestId })
       setData(rows);
       setTotal(idInput ? rows.length : (result.totalElements ?? rows.length));
     } catch (err) {
-      message.error(err.message || "Failed to load transactions");
-      setData([]);
-      setTotal(0);
+      if (!silent) {
+        message.error(err.message || "Failed to load transactions");
+        setData([]);
+        setTotal(0);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [applied, page, pageSize]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useAutoRefresh(() => {
+    loadData({ silent: true });
+  });
 
   const columns = useMemo(
     () => [
