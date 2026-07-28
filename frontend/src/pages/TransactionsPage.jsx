@@ -167,13 +167,20 @@ export default function TransactionsPage() {
     minAmount: null,
     maxAmount: null,
     dateRange: null,
-    keyword: "",
   });
-  const [applied, setApplied] = useState(filters);
+  const [applied, setApplied] = useState({
+    transactionId: "",
+    accountId: "",
+    payeeId: "",
+    minAmount: null,
+    maxAmount: null,
+    dateRange: null,
+  });
 
   const [data, setData] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -184,14 +191,10 @@ export default function TransactionsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detail, setDetail] = useState(null);
 
-  // Debounce filters so typing doesn't flood the API
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setApplied(filters);
-      setPage(0);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [filters]);
+  const handleSearch = () => {
+    setApplied({ ...filters });
+    setPage(0);
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -202,19 +205,8 @@ export default function TransactionsPage() {
       if (idInput && /^\d+$/.test(idInput)) {
         try {
           const tx = await fetchTransaction(idInput);
-          let rows = [mapRow(tx)];
-          const kw = applied.keyword.trim().toLowerCase();
-          if (kw) {
-            rows = rows.filter(
-              (r) =>
-                r.transactionRef?.toLowerCase().includes(kw) ||
-                r.accountId?.toLowerCase().includes(kw) ||
-                r.payeeId?.toLowerCase().includes(kw) ||
-                r.description?.toLowerCase().includes(kw)
-            );
-          }
-          setData(rows);
-          setTotal(rows.length);
+          setData([mapRow(tx)]);
+          setTotal(1);
         } catch (err) {
           if (err.status === 404) {
             setData([]);
@@ -228,7 +220,7 @@ export default function TransactionsPage() {
 
       const params = {
         page,
-        size: PAGE_SIZE,
+        size: pageSize,
       };
       if (applied.accountId.trim()) params.accountId = applied.accountId.trim();
       if (applied.payeeId.trim()) params.payeeId = applied.payeeId.trim();
@@ -254,19 +246,8 @@ export default function TransactionsPage() {
         );
       }
 
-      const kw = applied.keyword.trim().toLowerCase();
-      if (kw) {
-        rows = rows.filter(
-          (r) =>
-            r.transactionRef?.toLowerCase().includes(kw) ||
-            r.accountId?.toLowerCase().includes(kw) ||
-            r.payeeId?.toLowerCase().includes(kw) ||
-            r.description?.toLowerCase().includes(kw)
-        );
-      }
-
       setData(rows);
-      setTotal(idInput || kw ? rows.length : (result.totalElements ?? rows.length));
+      setTotal(idInput ? rows.length : (result.totalElements ?? rows.length));
     } catch (err) {
       message.error(err.message || "Failed to load transactions");
       setData([]);
@@ -274,7 +255,7 @@ export default function TransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [applied, page]);
+  }, [applied, page, pageSize]);
 
   useEffect(() => {
     loadData();
@@ -381,11 +362,18 @@ export default function TransactionsPage() {
   const handleCreate = async () => {
     try {
       const values = await form.validateFields();
+      const amount = Number(values.amount);
+      if (Number.isNaN(amount) || amount <= 0) {
+        form.setFields([
+          { name: "amount", errors: ["Amount must be greater than 0"] },
+        ]);
+        return Promise.reject();
+      }
       setCreating(true);
       const body = {
         accountId: values.accountId.trim(),
         payeeId: values.payeeId.trim(),
-        amount: values.amount,
+        amount,
         currency: values.currency,
         transactionType: values.transactionType,
         description: values.description?.trim() || undefined,
@@ -400,8 +388,9 @@ export default function TransactionsPage() {
       if (page === 0) loadData();
       else setPage(0);
     } catch (err) {
-      if (err?.errorFields) return;
+      if (err?.errorFields) return Promise.reject();
       message.error(err.message || "Failed to create transaction");
+      return Promise.reject(err);
     } finally {
       setCreating(false);
     }
@@ -411,7 +400,7 @@ export default function TransactionsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 18, fontWeight: 600, color: COLORS.ink, margin: 0 }}>
-          Transaction History
+          Transactions
         </h1>
         <Button
           type="primary"
@@ -496,14 +485,14 @@ export default function TransactionsPage() {
           </div>
 
           <div>
-            <label style={fieldLabelStyle}>Search</label>
-            <Input
-              allowClear
-              placeholder="Search..."
-              prefix={<Search size={15} color={COLORS.slate} />}
-              style={filterInputStyle}
-              value={filters.keyword}
-              onChange={(e) => setFilters((prev) => ({ ...prev, keyword: e.target.value }))}
+            <label style={fieldLabelStyle}>&nbsp;</label>
+            <Button
+              type="primary"
+              icon={<Search size={15} />}
+              onClick={handleSearch}
+              loading={loading}
+              aria-label="Search"
+              style={{ background: COLORS.accent }}
             />
           </div>
         </div>
@@ -522,10 +511,19 @@ export default function TransactionsPage() {
           })}
           pagination={{
             current: page + 1,
-            pageSize: PAGE_SIZE,
+            pageSize,
             total,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100],
             showTotal: (t) => `${t} transactions`,
-            onChange: (p) => setPage(p - 1),
+            onChange: (nextPage, nextSize) => {
+              if (nextSize !== pageSize) {
+                setPageSize(nextSize);
+                setPage(0);
+              } else {
+                setPage(nextPage - 1);
+              }
+            },
           }}
         />
       </div>
@@ -624,9 +622,27 @@ export default function TransactionsPage() {
           <Form.Item
             name="amount"
             label="Amount"
-            rules={[{ required: true, message: "Amount is required" }]}
+            rules={[
+              { required: true, message: "Amount is required" },
+              {
+                validator: (_, value) => {
+                  if (value === undefined || value === null || value === "") {
+                    return Promise.resolve();
+                  }
+                  const num = Number(value);
+                  if (Number.isNaN(num) || num <= 0) {
+                    return Promise.reject(new Error("Amount must be greater than 0"));
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
           >
-            <InputNumber style={{ width: "100%" }} min={0.01} precision={2} placeholder="15000.00" />
+            <InputNumber
+              style={{ width: "100%" }}
+              precision={2}
+              placeholder="15000.00"
+            />
           </Form.Item>
           <Form.Item
             name="currency"
