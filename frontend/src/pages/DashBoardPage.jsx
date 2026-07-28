@@ -9,7 +9,6 @@ import {
     Eye,
     SlidersHorizontal,
     Search,
-    Filter,
     RefreshCw,
     ArrowUpRight
 } from 'lucide-react';
@@ -63,10 +62,10 @@ const INITIAL_ALERTS = [
 ];
 
 // ==========================================
-// 重构后的图表组件 (修复溢出 & 增强饼图风格)
+// 重构后的图表组件 (交易图表去除$、k，纯数字展示)
 // ==========================================
 
-// 1. 交易趋势折线图（修复：精确控制坐标系与波峰，彻底解决溢出问题）
+// 1. 交易趋势折线图（按小时统计交易量，移除所有$、k单位）
 const TransactionsLineChart = () => (
     <div style={{ width: '100%', height: 135, position: 'relative', display: 'flex', flexDirection: 'column', padding: '4px 0 0' }}>
         <div style={{ flex: 1, width: '100%', position: 'relative', overflow: 'hidden' }}>
@@ -78,17 +77,22 @@ const TransactionsLineChart = () => (
                     </linearGradient>
                 </defs>
 
-                {/* 背景参考线 */}
+                {/* Y轴交易量刻度，已移除k单位 */}
                 <line x1="0" y1="20" x2="500" y2="20" stroke="#F1F5F9" strokeDasharray="3 3" />
-                <line x1="0" y1="60" x2="500" y2="60" stroke="#F1F5F9" strokeDasharray="3 3" />
-                <line x1="0" y1="100" x2="500" y2="100" stroke="#F1F5F9" strokeDasharray="3 3" />
+                <text x="6" y="24" fontSize="9" fill={THEME.textMuted} fontFamily="monospace">700</text>
 
-                {/* 区域填充与平滑曲线（波峰完全控制在 y=22 轴以内，不溢出） */}
+                <line x1="0" y1="60" x2="500" y2="60" stroke="#F1F5F9" strokeDasharray="3 3" />
+                <text x="6" y="64" fontSize="9" fill={THEME.textMuted} fontFamily="monospace">300</text>
+
+                <line x1="0" y1="100" x2="500" y2="100" stroke="#F1F5F9" strokeDasharray="3 3" />
+                <text x="6" y="104" fontSize="9" fill={THEME.textMuted} fontFamily="monospace">0</text>
+
+                {/* 区域填充与平滑曲线 */}
                 <path d="M 15,95 C 70,80 110,50 160,42 C 200,35 240,75 280,60 C 310,48 330,22 360,22 C 400,22 430,85 485,90 L 485,115 L 15,115 Z" fill="url(#transGrad)" />
                 <path d="M 15,95 C 70,80 110,50 160,42 C 200,35 240,75 280,60 C 310,48 330,22 360,22 C 400,22 430,85 485,90" fill="none" stroke="#3B82F6" strokeWidth="2.5" strokeLinecap="round" />
 
-                {/* 数据标注点 */}
-                {[{x: 160, y: 42, val: '$510k'}, {x: 360, y: 22, val: '$680k'}].map((pt, i) => (
+                {/* 数据标注点：删除$和k，仅纯数字 */}
+                {[{x: 160, y: 42, val: '510'}, {x: 360, y: 22, val: '680'}].map((pt, i) => (
                     <g key={i}>
                         <circle cx={pt.x} cy={pt.y} r="4" fill="#FFFFFF" stroke="#3B82F6" strokeWidth="2.5" />
                         <text x={pt.x} y={pt.y - 7} fontSize="10" textAnchor="middle" fill={THEME.textSecondary} fontFamily="monospace" fontWeight="700">
@@ -138,7 +142,7 @@ const SeverityBarChart = () => {
     );
 };
 
-// 3. 告警状态环形图（修改：更厚实专业的粗体 Donut 环形图，增强视觉对比与空间填充）
+// 3. 告警状态环形图
 const StatusPieChart = () => (
     <div style={{ width: '100%', height: 135, display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 8px' }}>
         <div style={{ position: 'relative', width: 100, height: 100, flexShrink: 0 }}>
@@ -146,7 +150,7 @@ const StatusPieChart = () => (
                 {/* 背景灰色槽线 */}
                 <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#F1F5F9" strokeWidth="6" />
 
-                {/* 4 个粗颗粒分类色彩弧线（利用 strokeDasharray 制造精细间隙） */}
+                {/* 4 个粗颗粒分类色彩弧线 */}
                 <circle cx="21" cy="21" r="15.915" fill="transparent" stroke={THEME.high.main} strokeWidth="6" strokeDasharray="23 77" strokeDashoffset="0" />
                 <circle cx="21" cy="21" r="15.915" fill="transparent" stroke={THEME.medium.main} strokeWidth="6" strokeDasharray="18 82" strokeDashoffset="-25" />
                 <circle cx="21" cy="21" r="15.915" fill="transparent" stroke={THEME.info.main} strokeWidth="6" strokeDasharray="13 87" strokeDashoffset="-45" />
@@ -180,7 +184,7 @@ const StatusPieChart = () => (
     </div>
 );
 
-// 4. 响应时长趋势图（修复：调整 SLA 目标线与曲线坐标，彻底阻止向上/向下超出容器）
+// 4. 响应时长趋势图
 const ResponseTimeTrendChart = () => (
     <div style={{ width: '100%', height: 135, position: 'relative', display: 'flex', flexDirection: 'column', padding: '4px 0 0' }}>
         <div style={{ flex: 1, width: '100%', position: 'relative', overflow: 'hidden' }}>
@@ -189,7 +193,7 @@ const ResponseTimeTrendChart = () => (
                 <line x1="0" y1="28" x2="500" y2="28" stroke="#EF4444" strokeDasharray="4 4" strokeWidth="1.2" opacity="0.6" />
                 <text x="490" y="20" fontSize="9" textAnchor="end" fill="#EF4444" fontFamily="monospace" fontWeight="600">Target SLA: 30.0m</text>
 
-                {/* 下滑趋势曲线（全在卡片框内） */}
+                {/* 下滑趋势曲线 */}
                 <path d="M 20,48 C 100,70 180,55 260,75 C 340,90 410,95 480,98" fill="none" stroke={THEME.success.main} strokeWidth="2.5" strokeLinecap="round" />
 
                 {[
@@ -327,7 +331,7 @@ export default function RiskDashboard() {
     return (
         <div style={{ background: THEME.bg, minHeight: '100vh', padding: 'clamp(12px, 2vw, 20px) clamp(16px, 2.5vw, 24px)', fontFamily: 'Inter, sans-serif' }}>
 
-            {/* 顶部 Header */}
+            {/* 顶部 Header - 已移除Filter Rules按钮 */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
                 <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -338,9 +342,9 @@ export default function RiskDashboard() {
                     </div>
                     <Text style={{ fontSize: 12, color: THEME.textSecondary }}>Real-time automated transaction evaluation & alert lifecycle triage</Text>
                 </div>
+                {/* 仅保留Refresh按钮，删除Filter Rules */}
                 <Space size="small" style={{ flexWrap: 'wrap' }}>
                     <Button icon={<RefreshCw size={13} />} size="small" style={{ borderRadius: 6 }}>Refresh</Button>
-                    <Button type="primary" icon={<Filter size={13} />} size="small" style={{ borderRadius: 6, background: THEME.textPrimary }}>Filter Rules</Button>
                 </Space>
             </div>
 
@@ -405,7 +409,7 @@ export default function RiskDashboard() {
                 </Col>
             </Row>
 
-            {/* 2. 核心四大图表区域（已彻底解决超出外框与环形图较薄的问题） */}
+            {/* 2. 核心四大图表区域 */}
             <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
                 <Col xs={24} lg={12}>
                     <Card
