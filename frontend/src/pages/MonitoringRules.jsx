@@ -15,6 +15,7 @@ import {
 import { Search, Plus, SlidersHorizontal, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import { COLORS } from '../constants/theme';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
 
 const API_BASE = '/api/rules';
 
@@ -71,8 +72,8 @@ export default function MonitoringRulesPage() {
     const [form] = Form.useForm();
 
     // 获取规则列表 (对应 RulePageResponse)
-    const fetchRules = useCallback(async () => {
-        setLoading(true);
+    const fetchRules = useCallback(async ({ silent = false } = {}) => {
+        if (!silent) setLoading(true);
         try {
             const params = {
                 page: pagination.current - 1, // 后端分页 index 从 0 开始
@@ -92,15 +93,21 @@ export default function MonitoringRulesPage() {
             setTotal(totalCount);
         } catch (error) {
             console.error('Fetch rules failed:', error);
-            message.error(error.response?.data?.message || 'Failed to obtain the rule list');
+            if (!silent) {
+                message.error(error.response?.data?.message || 'Failed to obtain the rule list');
+            }
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [pagination.current, pagination.pageSize, filters.type, filters.enabled, filters.severity]);
 
     useEffect(() => {
         fetchRules();
     }, [fetchRules]);
+
+    useAutoRefresh(() => {
+        fetchRules({ silent: true });
+    });
 
     // 前端关键字过滤
     const filteredData = useMemo(() => {
