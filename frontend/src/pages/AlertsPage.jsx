@@ -23,6 +23,7 @@ import {
 import AlertSummaryCard from "../components/AlertSummaryCard";
 import { fetchAlerts, fetchAlert, updateAlertStatus } from "../api/alerts";
 import { fetchTransaction } from "../api/transactions";
+import { REALTIME_EVENT_NAME } from "../components/NotificationCenter";
 
 const { RangePicker } = DatePicker;
 
@@ -95,7 +96,7 @@ const NEXT_ACTIONS = {
   DISMISSED: [],
 };
 
-export default function AlertsPage() {
+export default function AlertsPage({ focusAlertId, focusRequestId }) {
   const [alerts, setAlerts] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -243,7 +244,7 @@ export default function AlertsPage() {
     },
   ];
 
-  const openDetail = async (row) => {
+  const openDetail = useCallback(async (row) => {
     setSelected(row);
     setPendingAction(null);
     setRelatedTransactions([]);
@@ -281,7 +282,22 @@ export default function AlertsPage() {
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [form]);
+
+  useEffect(() => {
+    if (focusAlertId) openDetail({ id: focusAlertId });
+  }, [focusAlertId, focusRequestId, openDetail]);
+
+  useEffect(() => {
+    const refreshAlerts = (event) => {
+      if (event.detail?.type === "ALERT_CREATED") {
+        loadAlerts();
+        loadStats();
+      }
+    };
+    window.addEventListener(REALTIME_EVENT_NAME, refreshAlerts);
+    return () => window.removeEventListener(REALTIME_EVENT_NAME, refreshAlerts);
+  }, [loadAlerts, loadStats]);
 
   const applyTransition = async (to, notes) => {
     if (!selected?.id) return;

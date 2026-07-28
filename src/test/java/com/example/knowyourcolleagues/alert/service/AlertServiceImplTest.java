@@ -19,6 +19,7 @@ import com.example.knowyourcolleagues.mapper.AlertHistoryMapper;
 import com.example.knowyourcolleagues.mapper.AlertMapper;
 import com.example.knowyourcolleagues.mapper.AlertTransactionMapper;
 import com.example.knowyourcolleagues.service.impl.AlertServiceImpl;
+import com.example.knowyourcolleagues.websocket.RealtimeNotificationPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -48,6 +49,8 @@ class AlertServiceImplTest {
 
     @Mock
     private AlertTransactionMapper alertTransactionMapper;
+    @Mock
+    private RealtimeNotificationPublisher notificationPublisher;
 
     private AlertServiceImpl alertService;
 
@@ -57,7 +60,8 @@ class AlertServiceImplTest {
         alertService = new AlertServiceImpl(
                 alertMapper,
                 alertHistoryMapper,
-                alertTransactionMapper
+                alertTransactionMapper,
+                notificationPublisher
         );
     }
 
@@ -84,6 +88,7 @@ class AlertServiceImplTest {
         verify(alertHistoryMapper).insert(any(AlertHistory.class));
         verify(alertTransactionMapper, times(2))
                 .insert(any(AlertTransaction.class));
+        verify(notificationPublisher).publishAlertCreated(response);
     }
 
     @Test
@@ -98,6 +103,8 @@ class AlertServiceImplTest {
         verify(alertHistoryMapper, never()).insert(any(AlertHistory.class));
         verify(alertTransactionMapper, never())
                 .insert(any(AlertTransaction.class));
+        verify(notificationPublisher, never())
+                .publishAlertCreated(any(AlertResponse.class));
     }
 
     @Test
