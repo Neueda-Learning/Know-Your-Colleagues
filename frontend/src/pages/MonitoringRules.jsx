@@ -11,8 +11,9 @@ import {
     InputNumber,
     message,
     Descriptions,
+    Modal,
 } from 'antd';
-import { Search, Plus, SlidersHorizontal, RefreshCw } from 'lucide-react';
+import { Search, Plus, SlidersHorizontal, RefreshCw, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import { COLORS } from '../constants/theme';
 
@@ -36,10 +37,11 @@ const monoCell = (content, extraStyle = {}) => (
   </span>
 );
 
+// 修改LOW标签为蓝色processing
 const SEVERITY_COLORS = {
     HIGH: 'error',
     MEDIUM: 'warning',
-    LOW: 'default',
+    LOW: 'processing',
 };
 
 function formatDateTime(value) {
@@ -51,16 +53,19 @@ function formatDateTime(value) {
 }
 
 export default function MonitoringRulesPage() {
-    // 顶部筛选条件拆分
+    // 顶部筛选条件拆分（对齐后端GET参数：keyword, type, enabled, severity）
     const [filters, setFilters] = useState({
-        type: undefined,
-        enabled: undefined,
-        severity: undefined,
-        keyword: '',
+        keyword: '', // 模糊：规则名称/描述/ID（后端识别数字精确匹配ID）
+        type: undefined, // 精确枚举
+        enabled: undefined, // 精确布尔
+        severity: undefined, // 精确枚举
     });
+    // 保存点击搜索前的筛选快照，用于接口请求
+    const [submitFilters, setSubmitFilters] = useState({ ...filters });
 
     const [rules, setRules] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [searchLoading, setSearchLoading] = useState(false);
     const [total, setTotal] = useState(0);
     const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
@@ -70,18 +75,24 @@ export default function MonitoringRulesPage() {
     const [submitting, setSubmitting] = useState(false);
     const [form] = Form.useForm();
 
-    // 获取规则列表 (对应 RulePageResponse)
+    // 删除确认弹窗状态
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [targetDeleteRule, setTargetDeleteRule] = useState(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+
+    // 获取规则列表 (完全对齐后端RuleController.getRules参数)
     const fetchRules = useCallback(async () => {
         setLoading(true);
         try {
+            // 后端分页page从0开始，前端current从1开始
             const params = {
-                page: pagination.current - 1, // 后端分页 index 从 0 开始
+                page: pagination.current - 1,
                 size: pagination.pageSize,
+                keyword: submitFilters.keyword || undefined,
+                type: submitFilters.type,
+                enabled: submitFilters.enabled,
+                severity: submitFilters.severity,
             };
-
-            if (filters.type) params.type = filters.type;
-            if (filters.enabled !== undefined && filters.enabled !== null) params.enabled = filters.enabled;
-            if (filters.severity) params.severity = filters.severity;
 
             const res = await axios.get(API_BASE, { params });
             const data = res.data;
@@ -95,23 +106,34 @@ export default function MonitoringRulesPage() {
             message.error(error.response?.data?.message || 'Failed to obtain the rule list');
         } finally {
             setLoading(false);
+            setSearchLoading(false);
         }
-    }, [pagination.current, pagination.pageSize, filters.type, filters.enabled, filters.severity]);
+    }, [pagination.current, pagination.pageSize, submitFilters]);
 
+    // 分页切换时重新查询（使用已提交的筛选条件）
     useEffect(() => {
         fetchRules();
-    }, [fetchRules]);
+    }, [pagination.current, pagination.pageSize, fetchRules]);
 
-    // 前端关键字过滤
-    const filteredData = useMemo(() => {
-        const q = filters.keyword.trim().toLowerCase();
-        if (!q) return rules;
-        return rules.filter(
-            (row) =>
-                row.name?.toLowerCase().includes(q) ||
-                row.description?.toLowerCase().includes(q)
-        );
-    }, [rules, filters.keyword]);
+    // 点击蓝色搜索按钮触发查询
+    const handleSearch = () => {
+        setSearchLoading(true);
+        setSubmitFilters({ ...filters });
+        setPagination(p => ({ ...p, current: 1 }));
+    };
+
+    // 重置所有筛选条件
+    const resetFilters = () => {
+        const emptyFilter = {
+            keyword: '',
+            type: undefined,
+            enabled: undefined,
+            severity: undefined,
+        };
+        setFilters(emptyFilter);
+        setSubmitFilters(emptyFilter);
+        setPagination(p => ({ ...p, current: 1 }));
+    };
 
     // 修改启用状态 (PATCH /api/rules/{ruleId}/enabled)
     const handleToggleRule = async (record, enabled) => {
@@ -132,6 +154,24 @@ export default function MonitoringRulesPage() {
             } else {
                 message.error(error.response?.data?.message || 'Failed to update rule status');
             }
+        }
+    };
+
+    // 删除规则接口方法
+    const handleDeleteRule = async () => {
+        if (!targetDeleteRule) return;
+        setDeleteLoading(true);
+        try {
+            await axios.delete(`${API_BASE}/${targetDeleteRule.id}`);
+            message.success('Rule deleted successfully');
+            setDeleteModalVisible(false);
+            fetchRules();
+        } catch (error) {
+            console.error('Delete rule failed:', error);
+            message.error(error.response?.data?.message || 'Failed to delete rule');
+        } finally {
+            setDeleteLoading(false);
+            setTargetDeleteRule(null);
         }
     };
 
@@ -170,6 +210,12 @@ export default function MonitoringRulesPage() {
             dailyLimitAmount: record.dailyLimitAmount,
         });
         setIsDrawerOpen(true);
+    };
+
+    // 打开删除确认弹窗
+    const openDeleteConfirm = (record) => {
+        setTargetDeleteRule(record);
+        setDeleteModalVisible(true);
     };
 
     // 保存规则
@@ -293,16 +339,29 @@ export default function MonitoringRulesPage() {
             key: 'action',
             align: 'right',
             render: (_, record) => (
-                <Button
-                    type="link"
-                    size="small"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(record);
-                    }}
-                >
-                    Edit
-                </Button>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <Button
+                        type="link"
+                        size="small"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleEdit(record);
+                        }}
+                    >
+                        Edit
+                    </Button>
+                    {/* 删除按钮仅保留垃圾桶图标，无文字 */}
+                    <Button
+                        danger
+                        type="link"
+                        size="small"
+                        icon={<Trash2 size={14} />}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            openDeleteConfirm(record);
+                        }}
+                    />
+                </div>
             ),
         },
     ];
@@ -328,11 +387,12 @@ export default function MonitoringRulesPage() {
                         alignItems: 'end',
                     }}
                 >
+                    {/* 修改文案：Search Keyword，提示词 input rule name */}
                     <div>
                         <label style={fieldLabelStyle}>Search Keyword</label>
                         <Input
                             allowClear
-                            placeholder="Search Name / Description"
+                            placeholder="Input rule name"
                             prefix={<Search size={15} color={COLORS.slate} />}
                             style={filterInputStyle}
                             value={filters.keyword}
@@ -341,16 +401,13 @@ export default function MonitoringRulesPage() {
                     </div>
 
                     <div>
-                        <label style={fieldLabelStyle}>Rule Type</label>
+                        <label style={fieldLabelStyle}>Rule Type (Exact Match)</label>
                         <Select
                             allowClear
                             placeholder="All Types"
                             style={filterInputStyle}
                             value={filters.type}
-                            onChange={(val) => {
-                                setFilters((prev) => ({ ...prev, type: val }));
-                                setPagination((p) => ({ ...p, current: 1 }));
-                            }}
+                            onChange={(val) => setFilters((prev) => ({ ...prev, type: val }))}
                         >
                             <Select.Option value="AMOUNT_THRESHOLD">AMOUNT_THRESHOLD</Select.Option>
                             <Select.Option value="VELOCITY">VELOCITY</Select.Option>
@@ -360,16 +417,13 @@ export default function MonitoringRulesPage() {
                     </div>
 
                     <div>
-                        <label style={fieldLabelStyle}>Enabled Status</label>
+                        <label style={fieldLabelStyle}>Enabled Status (Exact Match)</label>
                         <Select
                             allowClear
                             placeholder="All Status"
                             style={filterInputStyle}
                             value={filters.enabled}
-                            onChange={(val) => {
-                                setFilters((prev) => ({ ...prev, enabled: val }));
-                                setPagination((p) => ({ ...p, current: 1 }));
-                            }}
+                            onChange={(val) => setFilters((prev) => ({ ...prev, enabled: val }))}
                         >
                             <Select.Option value={true}>Enabled</Select.Option>
                             <Select.Option value={false}>Disabled</Select.Option>
@@ -377,16 +431,13 @@ export default function MonitoringRulesPage() {
                     </div>
 
                     <div>
-                        <label style={fieldLabelStyle}>Severity</label>
+                        <label style={fieldLabelStyle}>Severity (Exact Match)</label>
                         <Select
                             allowClear
                             placeholder="All Severities"
                             style={filterInputStyle}
                             value={filters.severity}
-                            onChange={(val) => {
-                                setFilters((prev) => ({ ...prev, severity: val }));
-                                setPagination((p) => ({ ...p, current: 1 }));
-                            }}
+                            onChange={(val) => setFilters((prev) => ({ ...prev, severity: val }))}
                         >
                             <Select.Option value="HIGH">HIGH</Select.Option>
                             <Select.Option value="MEDIUM">MEDIUM</Select.Option>
@@ -395,14 +446,14 @@ export default function MonitoringRulesPage() {
                     </div>
 
                     <div style={{ display: 'flex', gap: 8 }}>
+                        <Button onClick={resetFilters}>Reset</Button>
+                        {/* 搜索按钮：仅放大镜图标，无文字，缩小宽度 */}
                         <Button
-                            icon={<RefreshCw size={14} />}
-                            onClick={fetchRules}
-                            loading={loading}
-                            style={{ flex: 1 }}
-                        >
-                            Reload
-                        </Button>
+                            type="primary"
+                            icon={<Search size={14} />}
+                            onClick={handleSearch}
+                            loading={searchLoading}
+                        />
                         <Button type="primary" icon={<Plus size={15} />} onClick={handleAddNew}>
                             New Rule
                         </Button>
@@ -416,14 +467,14 @@ export default function MonitoringRulesPage() {
                     rowKey="id"
                     loading={loading}
                     columns={columns}
-                    dataSource={filteredData}
+                    dataSource={rules}
                     size="middle"
                     pagination={{
                         current: pagination.current,
                         pageSize: pagination.pageSize,
                         total: total,
                         showSizeChanger: true,
-                        showQuickJumper: true, // 👈 加上这行，右下角就会多出一个“Go to [  ]”的输入框
+                        showQuickJumper: true,
                         onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
                         showTotal: (t) => `Total ${t} rules`,
                     }}
@@ -484,13 +535,18 @@ export default function MonitoringRulesPage() {
                         </Select>
                     </Form.Item>
 
-                    {/* 抽屉编辑框内部仍保留针对不同 Rule Type 的参数设置项（与创建/更新 API RequestBody 参数对齐） */}
+                    {/* 完整币种下拉，和截图保持一致 */}
                     {(currentType === 'AMOUNT_THRESHOLD' || currentType === 'DAILY_LIMIT') && (
                         <Form.Item name="currency" label="Currency" rules={[{ required: true }]}>
-                            <Select>
-                                <Select.Option value="USD">USD</Select.Option>
-                                <Select.Option value="EUR">EUR</Select.Option>
-                                <Select.Option value="CNY">CNY</Select.Option>
+                            <Select placeholder="Select Currency">
+                                <Select.Option value="USD">USD — US Dollar</Select.Option>
+                                <Select.Option value="CNY">CNY — Chinese Yuan (RMB)</Select.Option>
+                                <Select.Option value="EUR">EUR — Euro</Select.Option>
+                                <Select.Option value="GBP">GBP — British Pound</Select.Option>
+                                <Select.Option value="JPY">JPY — Japanese Yen</Select.Option>
+                                <Select.Option value="CHF">CHF — Swiss Franc</Select.Option>
+                                <Select.Option value="CAD">CAD — Canadian Dollar</Select.Option>
+                                <Select.Option value="AUD">AUD — Australian Dollar</Select.Option>
                             </Select>
                         </Form.Item>
                     )}
@@ -525,6 +581,24 @@ export default function MonitoringRulesPage() {
                     )}
                 </Form>
             </Drawer>
+
+            {/* 删除规则二次确认弹窗 */}
+            <Modal
+                title="Delete Rule Confirmation"
+                open={deleteModalVisible}
+                confirmLoading={deleteLoading}
+                onCancel={() => {
+                    setDeleteModalVisible(false);
+                    setTargetDeleteRule(null);
+                }}
+                onOk={handleDeleteRule}
+                okText="Confirm Delete"
+                cancelText="Cancel"
+                okButtonProps={{ danger: true }}
+            >
+                <p>Are you sure you want to delete rule <strong>#{targetDeleteRule?.id} {targetDeleteRule?.name}</strong>?</p>
+                <p style={{ color: '#f5222d' }}>This operation cannot be undone. If this rule has associated alerts, deletion will fail.</p>
+            </Modal>
         </div>
     );
 }
