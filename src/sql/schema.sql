@@ -208,6 +208,7 @@ CREATE TABLE IF NOT EXISTS alerts (
     KEY idx_alerts_status_created (status, created_at, id),
     KEY idx_alerts_severity_created (severity, created_at, id),
     KEY idx_alerts_account_created (account_id, created_at, id),
+    KEY idx_alerts_created_at (created_at, id),
     KEY idx_alerts_trigger_transaction (trigger_transaction_id),
 
     CONSTRAINT fk_alerts_rule
