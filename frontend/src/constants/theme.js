@@ -21,8 +21,8 @@ export const COLORS = {
 
 export const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon:  LayoutDashboard},
-  { key: "transactions", label: "Transaction History", icon: Receipt },
-  { key: "alerts", label: "Alert History", icon: BellRing},
+  { key: "transactions", label: "Transactions", icon: Receipt },
+  { key: "alerts", label: "Alerts", icon: BellRing},
   { key: "monitor", label: "Monitoring Rules", icon: ShieldAlert },
 
 ];
