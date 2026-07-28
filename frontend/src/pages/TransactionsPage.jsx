@@ -27,6 +27,7 @@ import {
   CURRENCY_OPTIONS,
 } from "../constants/mockData";
 import { fetchTransactions, fetchTransaction, createTransaction } from "../api/transactions";
+import { REALTIME_EVENT_NAME } from "../components/NotificationCenter";
 
 const { RangePicker } = DatePicker;
 
@@ -160,7 +161,7 @@ function AmountRangeInput({ minAmount, maxAmount, onChange }) {
   );
 }
 
-export default function TransactionsPage() {
+export default function TransactionsPage({ focusTransactionId, focusRequestId }) {
   const [filters, setFilters] = useState({
     transactionId: "",
     accountId: "",
@@ -352,7 +353,7 @@ export default function TransactionsPage() {
     []
   );
 
-  const openDetail = async (row) => {
+  const openDetail = useCallback(async (row) => {
     setDetailOpen(true);
     setDetail(row);
     if (!row?.id) return;
@@ -365,7 +366,19 @@ export default function TransactionsPage() {
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (focusTransactionId) openDetail({ id: focusTransactionId });
+  }, [focusRequestId, focusTransactionId, openDetail]);
+
+  useEffect(() => {
+    const refreshTransactions = (event) => {
+      if (event.detail?.type === "TRANSACTION_STATUS_CHANGED") loadData();
+    };
+    window.addEventListener(REALTIME_EVENT_NAME, refreshTransactions);
+    return () => window.removeEventListener(REALTIME_EVENT_NAME, refreshTransactions);
+  }, [loadData]);
 
   const handleCreate = async () => {
     try {
@@ -406,10 +419,7 @@ export default function TransactionsPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ fontSize: 18, fontWeight: 600, color: COLORS.ink, margin: 0 }}>
-          Transactions
-        </h1>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
         <Button
           type="primary"
           icon={<Plus size={16} />}

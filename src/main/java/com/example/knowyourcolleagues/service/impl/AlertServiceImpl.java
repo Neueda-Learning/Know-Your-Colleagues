@@ -21,6 +21,7 @@ import com.example.knowyourcolleagues.bizexception.alert.InvalidAlertTransitionE
 import com.example.knowyourcolleagues.mapper.AlertHistoryMapper;
 import com.example.knowyourcolleagues.mapper.AlertMapper;
 import com.example.knowyourcolleagues.mapper.AlertTransactionMapper;
+import com.example.knowyourcolleagues.websocket.RealtimeNotificationPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -47,6 +48,7 @@ public class AlertServiceImpl implements AlertService {
     private final AlertMapper alertMapper;
     private final AlertHistoryMapper alertHistoryMapper;
     private final AlertTransactionMapper alertTransactionMapper;
+    private final RealtimeNotificationPublisher notificationPublisher;
     private final Clock clock = Clock.systemUTC();
 
     @Override
@@ -94,7 +96,9 @@ public class AlertServiceImpl implements AlertService {
         saveHistory(alert.getId(), null, AlertStatus.OPEN,
                 "Alert created by rule evaluation", now);
         saveRelatedTransactions(alert.getId(), relatedTransactionIds);
-        return toResponse(alert);
+        AlertResponse response = toResponse(alert);
+        notificationPublisher.publishAlertCreated(response);
+        return response;
     }
 
     @Override

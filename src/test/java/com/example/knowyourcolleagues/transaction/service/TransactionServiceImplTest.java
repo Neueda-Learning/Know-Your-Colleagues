@@ -17,6 +17,7 @@ import com.example.knowyourcolleagues.enums.TransactionStatus;
 import com.example.knowyourcolleagues.enums.TransactionType;
 import com.example.knowyourcolleagues.mapper.TransactionMapper;
 import com.example.knowyourcolleagues.service.impl.TransactionServiceImpl;
+import com.example.knowyourcolleagues.websocket.RealtimeNotificationPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -44,6 +45,8 @@ class TransactionServiceImplTest {
     private TransactionMapper transactionMapper;
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
+    @Mock
+    private RealtimeNotificationPublisher notificationPublisher;
 
     private TransactionServiceImpl transactionService;
 
@@ -59,7 +62,8 @@ class TransactionServiceImplTest {
         );
         transactionService = new TransactionServiceImpl(
                 transactionMapper,
-                applicationEventPublisher
+                applicationEventPublisher,
+                notificationPublisher
         );
     }
 
@@ -212,6 +216,9 @@ class TransactionServiceImplTest {
     void shouldUpdatePendingTransactionToEvaluationStatus() {
         when(transactionMapper.update(any(), any(Wrapper.class)))
                 .thenReturn(1);
+        Transaction updated = transaction(1001L);
+        updated.setStatus(TransactionStatus.ABNORMAL);
+        when(transactionMapper.selectById(1001L)).thenReturn(updated);
 
         transactionService.updateStatusAfterEvaluation(
                 1001L,
@@ -219,7 +226,9 @@ class TransactionServiceImplTest {
         );
 
         verify(transactionMapper).update(any(), any(Wrapper.class));
-        verify(transactionMapper, never()).selectById(any());
+        verify(transactionMapper).selectById(1001L);
+        verify(notificationPublisher)
+                .publishTransactionStatusChanged(any(TransactionResponse.class));
     }
 
     @Test
@@ -236,6 +245,8 @@ class TransactionServiceImplTest {
         );
 
         verify(transactionMapper).selectById(1001L);
+        verify(notificationPublisher, never())
+                .publishTransactionStatusChanged(any(TransactionResponse.class));
     }
 
     @Test

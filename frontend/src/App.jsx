@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Sidebar from "./components/Sidebar";
+import NotificationCenter from "./components/NotificationCenter";
 import TransactionsPage from "./pages/TransactionsPage";
 import MonitoringRules from "./pages/MonitoringRules.jsx";
 import AlertsPage from "./pages/AlertsPage";
@@ -9,6 +10,7 @@ import "./App.css";
 
 export default function App() {
   const [active, setActive] = useState("transactions");
+  const [navigationTarget, setNavigationTarget] = useState(null);
 
   const pageTitle = NAV_ITEMS.find((n) => n.key === active)?.label ?? "";
 
@@ -17,14 +19,35 @@ export default function App() {
       case "dashboard":
         return <DashboardPage />;
       case "transactions":
-        return <TransactionsPage />;
+        return (
+          <TransactionsPage
+            focusTransactionId={navigationTarget?.type === "TRANSACTION" ? navigationTarget.id : null}
+            focusRequestId={navigationTarget?.requestId}
+          />
+        );
       case "monitor":
         return <MonitoringRules />;
       case "alerts":
-        return <AlertsPage />;
+        return (
+          <AlertsPage
+            focusAlertId={navigationTarget?.type === "ALERT" ? navigationTarget.id : null}
+            focusRequestId={navigationTarget?.requestId}
+          />
+        );
       default:
         return null;
     }
+  };
+
+  const handleNotificationNavigation = (action) => {
+    if (!action?.targetId || !action?.targetType) return;
+    const page = action.targetType === "ALERT" ? "alerts" : "transactions";
+    setNavigationTarget({
+      type: action.targetType,
+      id: action.targetId,
+      requestId: Date.now(),
+    });
+    setActive(page);
   };
 
   return (
@@ -32,15 +55,23 @@ export default function App() {
       <Sidebar active={active} onChange={setActive} />
 
       <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <header
+          style={{
+            height: 54,
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 24px",
+            background: COLORS.card,
+            borderBottom: `1px solid ${COLORS.border}`,
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 600, color: COLORS.ink }}>{pageTitle}</span>
+          <NotificationCenter onNavigate={handleNotificationNavigation} />
+        </header>
         <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
-          {active === "transactions" ? (
-            renderPage()
-          ) : (
-            <>
-              <h1 style={{ fontSize: 18, fontWeight: 600, color: COLORS.ink, margin: "0 0 16px" }}>{pageTitle}</h1>
-              {renderPage()}
-            </>
-          )}
+          {renderPage()}
         </div>
       </main>
     </div>

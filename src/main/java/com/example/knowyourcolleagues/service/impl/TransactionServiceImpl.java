@@ -15,6 +15,7 @@ import com.example.knowyourcolleagues.entity.Transaction;
 import com.example.knowyourcolleagues.enums.TransactionStatus;
 import com.example.knowyourcolleagues.mapper.TransactionMapper;
 import com.example.knowyourcolleagues.service.TransactionService;
+import com.example.knowyourcolleagues.websocket.RealtimeNotificationPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -46,6 +47,7 @@ public class TransactionServiceImpl implements TransactionService {
 
     private final TransactionMapper transactionMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final RealtimeNotificationPublisher notificationPublisher;
     private final Clock clock = Clock.systemUTC();
 
     @Override
@@ -171,6 +173,17 @@ public class TransactionServiceImpl implements TransactionService {
                         .set(Transaction::getUpdatedAt, now)
         );
         if (updatedRows == 1) {
+            Transaction updatedTransaction =
+                    transactionMapper.selectById(transactionId);
+            if (updatedTransaction == null) {
+                throw new TransactionNotFoundException(
+                        "Transaction not found after status update: "
+                                + transactionId
+                );
+            }
+            notificationPublisher.publishTransactionStatusChanged(
+                    toResponse(updatedTransaction)
+            );
             return;
         }
 
