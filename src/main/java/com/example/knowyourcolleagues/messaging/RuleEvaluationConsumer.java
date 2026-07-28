@@ -4,6 +4,7 @@ import com.example.knowyourcolleagues.bizexception.rule.InvalidRuleRequestExcept
 import com.example.knowyourcolleagues.config.RuleRabbitMqConfig;
 import com.example.knowyourcolleagues.dto.TransactionRecordedEvent;
 import com.example.knowyourcolleagues.dto.TransactionResponse;
+import com.example.knowyourcolleagues.dto.RuleEngineResult;
 import com.example.knowyourcolleagues.service.RuleEngineService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ import java.util.Set;
 public class RuleEvaluationConsumer {
 
     private final RuleEngineService ruleEngineService;
+    private final RuleEvaluationResultPublisher resultPublisher;
 
     @RabbitListener(queues = RuleRabbitMqConfig.RULE_EVALUATION_QUEUE)
     public void consume(TransactionRecordedEvent event) {
@@ -39,7 +41,8 @@ public class RuleEvaluationConsumer {
 
         Set<Long> transactionIds = extractTransactionIds(event);
         for (Long transactionId : transactionIds) {
-            ruleEngineService.evaluateTransaction(transactionId);
+            ruleEngineService.evaluateTransaction(transactionId)
+                    .ifPresent(result -> publishResult(event, result));
         }
 
         log.info(
@@ -48,6 +51,13 @@ public class RuleEvaluationConsumer {
                 event.getEventId(),
                 transactionIds.size()
         );
+    }
+
+    private void publishResult(
+            TransactionRecordedEvent sourceEvent,
+            RuleEngineResult result
+    ) {
+        resultPublisher.publish(sourceEvent.getEventId(), result);
     }
 
     private Set<Long> extractTransactionIds(

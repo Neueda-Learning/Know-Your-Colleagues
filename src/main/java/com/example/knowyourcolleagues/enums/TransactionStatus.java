@@ -6,17 +6,17 @@ package com.example.knowyourcolleagues.enums;
 public enum TransactionStatus {
 
     /**
-     * 交易已创建，正在等待处理。
+     * 标记为正常交易。
+     */
+    NORMAL,
+
+    /**
+     * 交易已经创建，正在等待规则校验
      */
     PENDING,
 
     /**
-     * 交易已经成功完成，可参与规则评估。
+     * 规则校验失败，标记为异常交易。
      */
-    COMPLETED,
-
-    /**
-     * 交易处理失败，不参与正常的规则统计。
-     */
-    FAILED
+    ABNORMAL
 }

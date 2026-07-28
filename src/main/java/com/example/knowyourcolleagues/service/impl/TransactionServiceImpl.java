@@ -1,6 +1,7 @@
 package com.example.knowyourcolleagues.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.knowyourcolleagues.bizexception.transaction.InvalidTransactionRequestException;
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
@@ -15,6 +16,7 @@ import com.example.knowyourcolleagues.enums.TransactionStatus;
 import com.example.knowyourcolleagues.mapper.TransactionMapper;
 import com.example.knowyourcolleagues.service.TransactionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TransactionServiceImpl implements TransactionService {
 
     private static final long MAX_PAGE_SIZE = 100L;
@@ -57,9 +60,7 @@ public class TransactionServiceImpl implements TransactionService {
         transaction.setAmount(request.getAmount());
         transaction.setCurrency(request.getCurrency().trim().toUpperCase(Locale.ROOT));
         transaction.setTransactionType(request.getTransactionType());
-        transaction.setStatus(request.getStatus() == null
-                ? TransactionStatus.COMPLETED
-                : request.getStatus());
+        transaction.setStatus(TransactionStatus.PENDING);
         transaction.setDescription(trimToNull(request.getDescription()));
         transaction.setTransactionTime(request.getTransactionTime() == null
                 ? now
@@ -147,6 +148,79 @@ public class TransactionServiceImpl implements TransactionService {
             );
         }
         return toResponse(transaction);
+    }
+
+    @Override
+    @Transactional
+    public void updateStatusAfterEvaluation(
+            Long transactionId,
+            TransactionStatus targetStatus
+    ) {
+        validateEvaluationStatusUpdate(transactionId, targetStatus);
+
+        LocalDateTime now = LocalDateTime.ofInstant(
+                clock.instant(),
+                ZoneOffset.UTC
+        );
+        int updatedRows = transactionMapper.update(
+                null,
+                new LambdaUpdateWrapper<Transaction>()
+                        .eq(Transaction::getId, transactionId)
+                        .eq(Transaction::getStatus, TransactionStatus.PENDING)
+                        .set(Transaction::getStatus, targetStatus)
+                        .set(Transaction::getUpdatedAt, now)
+        );
+        if (updatedRows == 1) {
+            return;
+        }
+
+        Transaction current = transactionMapper.selectById(transactionId);
+        if (current == null) {
+            throw new TransactionNotFoundException(
+                    "Transaction not found: " + transactionId
+            );
+        }
+        if (current.getStatus() == targetStatus) {
+            log.info(
+                    "Ignored duplicate transaction evaluation result: "
+                            + "transactionId={}, status={}",
+                    transactionId,
+                    targetStatus
+            );
+            return;
+        }
+        if (current.getStatus() != TransactionStatus.PENDING) {
+            log.warn(
+                    "Ignored stale transaction evaluation result: "
+                            + "transactionId={}, currentStatus={}, "
+                            + "requestedStatus={}",
+                    transactionId,
+                    current.getStatus(),
+                    targetStatus
+            );
+            return;
+        }
+        throw new IllegalStateException(
+                "Unable to update pending transaction status: "
+                        + transactionId
+        );
+    }
+
+    private void validateEvaluationStatusUpdate(
+            Long transactionId,
+            TransactionStatus targetStatus
+    ) {
+        if (transactionId == null || transactionId <= 0) {
+            throw new InvalidTransactionRequestException(
+                    "transactionId must be positive"
+            );
+        }
+        if (targetStatus != TransactionStatus.NORMAL
+                && targetStatus != TransactionStatus.ABNORMAL) {
+            throw new InvalidTransactionRequestException(
+                    "Rule evaluation can only set NORMAL or ABNORMAL"
+            );
+        }
     }
 
     private void validateCreateRequest(CreateTransactionRequest request) {

@@ -1,6 +1,8 @@
 package com.example.knowyourcolleagues.transaction.service;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.knowyourcolleagues.bizexception.transaction.InvalidTransactionRequestException;
 import com.example.knowyourcolleagues.bizexception.transaction.TransactionNotFoundException;
@@ -21,6 +23,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.MockitoAnnotations;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.springframework.dao.DuplicateKeyException;
 
 import java.math.BigDecimal;
@@ -47,6 +50,13 @@ class TransactionServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(
+                        new MybatisConfiguration(),
+                        "transaction-test"
+                ),
+                Transaction.class
+        );
         transactionService = new TransactionServiceImpl(
                 transactionMapper,
                 applicationEventPublisher
@@ -64,7 +74,6 @@ class TransactionServiceImplTest {
 
         CreateTransactionRequest request = validCreateRequest();
         request.setCurrency("usd");
-        request.setStatus(null);
         request.setTransactionTime(null);
 
         TransactionResponse response =
@@ -78,7 +87,7 @@ class TransactionServiceImplTest {
         assertThat(inserted.getTransactionRef())
                 .matches("TXN-\\d{17}-[A-F0-9]{20}");
         assertThat(inserted.getCurrency()).isEqualTo("USD");
-        assertThat(inserted.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
+        assertThat(inserted.getStatus()).isEqualTo(TransactionStatus.PENDING);
         assertThat(inserted.getTransactionTime()).isNotNull();
         assertThat(inserted.getCreatedAt()).isNotNull();
         assertThat(response.getId()).isEqualTo(1001L);
@@ -154,7 +163,7 @@ class TransactionServiceImplTest {
         query.setTransactionTimeEnd(
                 LocalDateTime.parse("2026-07-31T23:59:59")
         );
-        query.setStatus(TransactionStatus.COMPLETED);
+        query.setStatus(TransactionStatus.NORMAL);
         query.setPage(2);
         query.setSize(5);
 
@@ -199,6 +208,49 @@ class TransactionServiceImplTest {
                 .hasMessageContaining("999");
     }
 
+    @Test
+    void shouldUpdatePendingTransactionToEvaluationStatus() {
+        when(transactionMapper.update(any(), any(Wrapper.class)))
+                .thenReturn(1);
+
+        transactionService.updateStatusAfterEvaluation(
+                1001L,
+                TransactionStatus.ABNORMAL
+        );
+
+        verify(transactionMapper).update(any(), any(Wrapper.class));
+        verify(transactionMapper, never()).selectById(any());
+    }
+
+    @Test
+    void shouldAcceptDuplicateEvaluationResultIdempotently() {
+        when(transactionMapper.update(any(), any(Wrapper.class)))
+                .thenReturn(0);
+        Transaction existing = transaction(1001L);
+        existing.setStatus(TransactionStatus.NORMAL);
+        when(transactionMapper.selectById(1001L)).thenReturn(existing);
+
+        transactionService.updateStatusAfterEvaluation(
+                1001L,
+                TransactionStatus.NORMAL
+        );
+
+        verify(transactionMapper).selectById(1001L);
+    }
+
+    @Test
+    void shouldRejectPendingAsFinalEvaluationStatus() {
+        assertThatThrownBy(() ->
+                transactionService.updateStatusAfterEvaluation(
+                        1001L,
+                        TransactionStatus.PENDING
+                )
+        ).isInstanceOf(InvalidTransactionRequestException.class)
+                .hasMessageContaining("NORMAL or ABNORMAL");
+
+        verify(transactionMapper, never()).update(any(), any(Wrapper.class));
+    }
+
     private CreateTransactionRequest validCreateRequest() {
         CreateTransactionRequest request = new CreateTransactionRequest();
         request.setAccountId("ACC-001");
@@ -206,7 +258,6 @@ class TransactionServiceImplTest {
         request.setAmount(new BigDecimal("15000.00"));
         request.setCurrency("USD");
         request.setTransactionType(TransactionType.DEBIT);
-        request.setStatus(TransactionStatus.COMPLETED);
         request.setDescription("Supplier payment");
         request.setTransactionTime(
                 LocalDateTime.parse("2026-07-27T14:30:00")
@@ -226,7 +277,7 @@ class TransactionServiceImplTest {
         transaction.setAmount(new BigDecimal("15000.00"));
         transaction.setCurrency("USD");
         transaction.setTransactionType(TransactionType.DEBIT);
-        transaction.setStatus(TransactionStatus.COMPLETED);
+        transaction.setStatus(TransactionStatus.NORMAL);
         transaction.setDescription("Supplier payment");
         transaction.setTransactionTime(now);
         transaction.setCreatedAt(now);
