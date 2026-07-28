@@ -50,6 +50,8 @@ public class RuleEngineServiceImpl implements RuleEngineService {
             return Optional.empty();
         }
 
+        List<Long> matchedRuleIds = new ArrayList<>();
+        List<Long> alertIds = new ArrayList<>();
         List<Rule> rules = ruleMapper.selectList(
                 new LambdaQueryWrapper<Rule>()
                         .eq(Rule::getEnabled, Boolean.TRUE)

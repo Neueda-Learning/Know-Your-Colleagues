@@ -5,6 +5,9 @@ import com.example.knowyourcolleagues.dto.TransactionResponse;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.Binding;
+import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 
 import java.math.BigDecimal;
@@ -58,5 +61,30 @@ class RuleRabbitMqConfigTest {
                     assertThat(item.getAmount())
                             .isEqualByComparingTo("128.88");
                 });
+    }
+
+    @Test
+    void shouldConfigureTransactionEvaluationResultRoute() {
+        RuleRabbitMqConfig config = new RuleRabbitMqConfig();
+        DirectExchange exchange = config.ruleEvaluationResultsExchange();
+        Queue queue = config.transactionStatusUpdateQueue();
+        Binding binding = config.transactionEvaluationResultBinding(
+                queue,
+                exchange
+        );
+
+        assertThat(exchange.getName()).isEqualTo(
+                RuleRabbitMqConfig.RULE_EVALUATION_RESULTS_EXCHANGE
+        );
+        assertThat(exchange.isDurable()).isTrue();
+        assertThat(queue.getName()).isEqualTo(
+                RuleRabbitMqConfig.TRANSACTION_STATUS_UPDATE_QUEUE
+        );
+        assertThat(queue.isDurable()).isTrue();
+        assertThat(binding.getRoutingKey()).isEqualTo(
+                RuleRabbitMqConfig.TRANSACTION_EVALUATED_KEY
+        );
+        assertThat(binding.getDestination()).isEqualTo(queue.getName());
+        assertThat(binding.getExchange()).isEqualTo(exchange.getName());
     }
 }
