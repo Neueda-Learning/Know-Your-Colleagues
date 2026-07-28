@@ -585,7 +585,7 @@ export default function MonitoringRulesPage() {
             {/* 删除规则二次确认弹窗 */}
             <Modal
                 title="Delete Rule Confirmation"
-                open={deleteModalVisible}
+                open={deleteModalVisible}//
                 confirmLoading={deleteLoading}
                 onCancel={() => {
                     setDeleteModalVisible(false);
