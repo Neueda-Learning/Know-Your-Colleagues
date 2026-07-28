@@ -26,6 +26,7 @@ import AlertSummaryCard from "../components/AlertSummaryCard";
 import { fetchAlerts, fetchAlert, updateAlertStatus } from "../api/alerts";
 import { fetchTransaction } from "../api/transactions";
 import { REALTIME_EVENT_NAME } from "../components/NotificationCenter";
+import { useAutoRefresh } from "../hooks/useAutoRefresh";
 
 const { RangePicker } = DatePicker;
 
@@ -177,8 +178,8 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
     }
   }, []);
 
-  const loadAlerts = useCallback(async () => {
-    setLoading(true);
+  const loadAlerts = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const params = {
         page,
@@ -196,11 +197,13 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
       setAlerts((result.content ?? []).map(mapAlertRow));
       setTotal(result.totalElements ?? 0);
     } catch (err) {
-      message.error(err.message || "Failed to load alerts");
-      setAlerts([]);
-      setTotal(0);
+      if (!silent) {
+        message.error(err.message || "Failed to load alerts");
+        setAlerts([]);
+        setTotal(0);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [page, pageSize, applied]);
 
@@ -211,6 +214,11 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
   useEffect(() => {
     loadStats();
   }, [loadStats]);
+
+  useAutoRefresh(() => {
+    loadAlerts({ silent: true });
+    loadStats();
+  });
 
   const displayAlerts = useMemo(() => {
     const end = applied.dateRange?.[1];
