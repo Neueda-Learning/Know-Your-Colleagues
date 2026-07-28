@@ -21,6 +21,7 @@ import { COLORS } from "../constants/theme";
 import {
   TRANSACTION_STATUS_LABEL,
   TRANSACTION_STATUS_COLOR,
+  TRANSACTION_STATUS_OPTIONS,
   TRANSACTION_TYPE_LABEL,
   TRANSACTION_TYPE_COLOR,
   CURRENCY_OPTIONS,
@@ -168,6 +169,7 @@ export default function TransactionsPage({ focusTransactionId, focusRequestId })
     minAmount: null,
     maxAmount: null,
     dateRange: null,
+    status: undefined,
   });
   const [applied, setApplied] = useState({
     transactionId: "",
@@ -176,6 +178,7 @@ export default function TransactionsPage({ focusTransactionId, focusRequestId })
     minAmount: null,
     maxAmount: null,
     dateRange: null,
+    status: undefined,
   });
 
   const [data, setData] = useState([]);
@@ -206,8 +209,14 @@ export default function TransactionsPage({ focusTransactionId, focusRequestId })
       if (idInput && /^\d+$/.test(idInput)) {
         try {
           const tx = await fetchTransaction(idInput);
-          setData([mapRow(tx)]);
-          setTotal(1);
+          const row = mapRow(tx);
+          if (applied.status && row.status !== applied.status) {
+            setData([]);
+            setTotal(0);
+          } else {
+            setData([row]);
+            setTotal(1);
+          }
         } catch (err) {
           if (err.status === 404) {
             setData([]);
@@ -227,6 +236,7 @@ export default function TransactionsPage({ focusTransactionId, focusRequestId })
       if (applied.payeeId.trim()) params.payeeId = applied.payeeId.trim();
       if (applied.minAmount != null) params.minAmount = applied.minAmount;
       if (applied.maxAmount != null) params.maxAmount = applied.maxAmount;
+      if (applied.status) params.status = applied.status;
       if (applied.dateRange?.[0]) {
         params.transactionTimeStart = applied.dateRange[0].startOf("day").format("YYYY-MM-DDTHH:mm:ss");
       }
@@ -335,8 +345,6 @@ export default function TransactionsPage({ focusTransactionId, focusRequestId })
         title: "Status",
         dataIndex: "status",
         key: "status",
-        filters: Object.entries(TRANSACTION_STATUS_LABEL).map(([value, text]) => ({ text, value })),
-        onFilter: (value, row) => row.status === value,
         render: (status) => (
           <Tag color={TRANSACTION_STATUS_COLOR[status]}>{TRANSACTION_STATUS_LABEL[status] ?? status}</Tag>
         ),
@@ -491,6 +499,18 @@ export default function TransactionsPage({ focusTransactionId, focusRequestId })
               onChange={(range) => setFilters((prev) => ({ ...prev, dateRange: range }))}
               prefix={<Calendar size={14} color={COLORS.slate} />}
               allowClear
+            />
+          </div>
+
+          <div>
+            <label style={fieldLabelStyle}>Status</label>
+            <Select
+              allowClear
+              placeholder="Select status"
+              style={filterInputStyle}
+              value={filters.status}
+              options={TRANSACTION_STATUS_OPTIONS}
+              onChange={(status) => setFilters((prev) => ({ ...prev, status }))}
             />
           </div>
 

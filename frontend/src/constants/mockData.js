@@ -127,15 +127,20 @@ export const ALERTS = [
 ];
 
 export const TRANSACTION_STATUS_LABEL = {
-  PENDING: "PENDING",
-  NORMAL: "NORMAL",
-  ABNORMAL: "ABNORMAL",
+  NORMAL: "Normal",
+  ABNORMAL: "Abnormal",
+  PENDING: "Pending",
 };
 export const TRANSACTION_STATUS_COLOR = {
-  PENDING: "processing",
   NORMAL: "success",
   ABNORMAL: "error",
+  PENDING: "processing",
 };
+export const TRANSACTION_STATUS_OPTIONS = [
+  { label: "Normal", value: "NORMAL" },
+  { label: "Abnormal", value: "ABNORMAL" },
+  { label: "Pending", value: "PENDING" },
+];
 
 export const TRANSACTION_TYPE_LABEL = { DEBIT: "DEBIT", CREDIT: "CREDIT" };
 export const TRANSACTION_TYPE_COLOR = { DEBIT: "error", CREDIT: "success" };

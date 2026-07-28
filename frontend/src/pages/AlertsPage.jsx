@@ -9,10 +9,12 @@ import {
   Space,
   Form,
   Input,
+  Select,
   Timeline,
   message,
   Spin,
 } from "antd";
+import { Search, Calendar } from "lucide-react";
 import { COLORS } from "../constants/theme";
 import {
   SEVERITY_OPTIONS,
@@ -28,6 +30,18 @@ import { REALTIME_EVENT_NAME } from "../components/NotificationCenter";
 const { RangePicker } = DatePicker;
 
 const PAGE_SIZE = 20;
+
+const fieldLabelStyle = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 600,
+  color: COLORS.ink,
+  marginBottom: 6,
+};
+
+const filterInputStyle = {
+  width: "100%",
+};
 
 function toDate(value) {
   if (!value) return null;
@@ -96,14 +110,25 @@ const NEXT_ACTIONS = {
   DISMISSED: [],
 };
 
-export default function AlertsPage({ focusAlertId, focusRequestId }) {
+export default function AlertsPage() {
+  const [filters, setFilters] = useState({
+    severity: undefined,
+    status: undefined,
+    accountId: "",
+    dateRange: null,
+  });
+  const [applied, setApplied] = useState({
+    severity: undefined,
+    status: undefined,
+    accountId: "",
+    dateRange: null,
+  });
+
   const [alerts, setAlerts] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState(undefined);
-  const [severityFilter, setSeverityFilter] = useState(undefined);
-  const [dateRange, setDateRange] = useState(null);
 
   const [openCount, setOpenCount] = useState(0);
   const [ackCount, setAckCount] = useState(0);
@@ -116,6 +141,11 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
   const [pendingAction, setPendingAction] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [form] = Form.useForm();
+
+  const handleSearch = () => {
+    setApplied({ ...filters });
+    setPage(0);
+  };
 
   const loadStats = useCallback(async () => {
     try {
@@ -150,12 +180,19 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
   const loadAlerts = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await fetchAlerts({
-        status: statusFilter,
-        severity: severityFilter,
+      const params = {
         page,
-        size: PAGE_SIZE,
-      });
+        size: pageSize,
+      };
+      if (applied.severity) params.severity = applied.severity;
+      if (applied.status) params.status = applied.status;
+      if (applied.accountId.trim()) params.accountId = applied.accountId.trim();
+      // Backend only supports createdAtStart (from); "to" is filtered on the current page.
+      if (applied.dateRange?.[0]) {
+        params.createdAtStart = applied.dateRange[0].startOf("day").toISOString();
+      }
+
+      const result = await fetchAlerts(params);
       setAlerts((result.content ?? []).map(mapAlertRow));
       setTotal(result.totalElements ?? 0);
     } catch (err) {
@@ -165,7 +202,7 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, severityFilter]);
+  }, [page, pageSize, applied]);
 
   useEffect(() => {
     loadAlerts();
@@ -175,15 +212,15 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
     loadStats();
   }, [loadStats]);
 
-  const filteredData = useMemo(() => {
-    if (!dateRange?.[0] || !dateRange?.[1]) return alerts;
-    const start = dateRange[0].startOf("day").toDate();
-    const end = dateRange[1].endOf("day").toDate();
+  const displayAlerts = useMemo(() => {
+    const end = applied.dateRange?.[1];
+    if (!end) return alerts;
+    const endTime = end.endOf("day").toDate();
     return alerts.filter((a) => {
       const created = toDate(a.createdAt);
-      return created && created >= start && created <= end;
+      return created && created <= endTime;
     });
-  }, [alerts, dateRange]);
+  }, [alerts, applied.dateRange]);
 
   const columns = [
     {
@@ -200,9 +237,6 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
       title: "Severity",
       dataIndex: "severity",
       key: "severity",
-      filteredValue: severityFilter ? [severityFilter] : null,
-      filters: SEVERITY_OPTIONS.map((o) => ({ text: o.label, value: o.value })),
-      filterMultiple: false,
       render: (s) => <Tag color={SEVERITY_COLOR[s]}>{s}</Tag>,
     },
     {
@@ -227,9 +261,6 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      filteredValue: statusFilter ? [statusFilter] : null,
-      filters: ALERT_STATUS_OPTIONS.map((o) => ({ text: o.label, value: o.value })),
-      filterMultiple: false,
       render: (s) => <Tag color={ALERT_STATUS_COLOR[s]}>{s}</Tag>,
     },
     {
@@ -357,36 +388,107 @@ export default function AlertsPage({ focusAlertId, focusRequestId }) {
         />
       </div>
 
-      <div>
-        <RangePicker
-          value={dateRange}
-          onChange={(v) => setDateRange(v)}
-          placeholder={["Created from", "Created to"]}
-          style={{ maxWidth: 320 }}
-          allowClear
-        />
+      <div
+        style={{
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+          borderRadius: 12,
+          padding: "16px 20px",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: 12,
+            alignItems: "end",
+          }}
+        >
+          <div>
+            <label style={fieldLabelStyle}>Severity</label>
+            <Select
+              allowClear
+              placeholder="Select severity"
+              style={filterInputStyle}
+              value={filters.severity}
+              options={SEVERITY_OPTIONS}
+              onChange={(severity) => setFilters((prev) => ({ ...prev, severity }))}
+            />
+          </div>
+
+          <div>
+            <label style={fieldLabelStyle}>Status</label>
+            <Select
+              allowClear
+              placeholder="Select status"
+              style={filterInputStyle}
+              value={filters.status}
+              options={ALERT_STATUS_OPTIONS}
+              onChange={(status) => setFilters((prev) => ({ ...prev, status }))}
+            />
+          </div>
+
+          <div>
+            <label style={fieldLabelStyle}>Account ID</label>
+            <Input
+              allowClear
+              placeholder="Enter account ID"
+              style={filterInputStyle}
+              value={filters.accountId}
+              onChange={(e) => setFilters((prev) => ({ ...prev, accountId: e.target.value }))}
+              onPressEnter={handleSearch}
+            />
+          </div>
+
+          <div>
+            <label style={fieldLabelStyle}>Created Time</label>
+            <RangePicker
+              style={{ width: "100%" }}
+              placeholder={["From", "To"]}
+              value={filters.dateRange}
+              onChange={(dateRange) => setFilters((prev) => ({ ...prev, dateRange }))}
+              prefix={<Calendar size={14} color={COLORS.slate} />}
+              allowClear
+            />
+          </div>
+
+          <div>
+            <label style={fieldLabelStyle}>&nbsp;</label>
+            <Button
+              type="primary"
+              icon={<Search size={15} />}
+              onClick={handleSearch}
+              loading={loading}
+              aria-label="Search"
+              style={{ background: COLORS.accent }}
+            />
+          </div>
+        </div>
       </div>
 
       <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, overflow: "hidden" }}>
         <Table
           columns={columns}
-          dataSource={filteredData}
+          dataSource={displayAlerts}
           loading={loading}
           size="middle"
           onRow={(row) => ({ onClick: () => openDetail(row), style: { cursor: "pointer" } })}
-          onChange={(pagination, filters) => {
-            const nextStatus = filters.status?.[0];
-            const nextSeverity = filters.severity?.[0];
+          onChange={(pagination) => {
             const nextPage = (pagination.current ?? 1) - 1;
-            const filterChanged = nextStatus !== statusFilter || nextSeverity !== severityFilter;
-            setStatusFilter(nextStatus);
-            setSeverityFilter(nextSeverity);
-            setPage(filterChanged ? 0 : nextPage);
+            const nextSize = pagination.pageSize ?? pageSize;
+            if (nextSize !== pageSize) {
+              setPageSize(nextSize);
+              setPage(0);
+            } else {
+              setPage(nextPage);
+            }
           }}
           pagination={{
             current: page + 1,
-            pageSize: PAGE_SIZE,
-            total: dateRange ? filteredData.length : total,
+            pageSize,
+            total: applied.dateRange?.[1] ? displayAlerts.length : total,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100],
             showTotal: (t) => `${t} Alerts`,
           }}
         />
