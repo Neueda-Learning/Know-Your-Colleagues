@@ -110,7 +110,7 @@ const NEXT_ACTIONS = {
   DISMISSED: [],
 };
 
-export default function AlertsPage() {
+export default function AlertsPage({ focusAlertId, focusRequestId }) {
   const [filters, setFilters] = useState({
     severity: undefined,
     status: undefined,
