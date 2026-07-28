@@ -31,9 +31,6 @@ class RuleEvaluationConsumerTest {
     @Mock
     private RuleEvaluationResultPublisher resultPublisher;
 
-    @Mock
-    private RuleEvaluationResultPublisher resultPublisher;
-
     private RuleEvaluationConsumer consumer;
 
     @BeforeEach

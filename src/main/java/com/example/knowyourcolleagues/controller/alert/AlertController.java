@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.List;
 
 @RestController
@@ -63,10 +65,24 @@ public class AlertController {
             @Parameter(description = "页码，从 0 开始", example = "0")
             @RequestParam(defaultValue = "0") long page,
             @Parameter(description = "每页数量，范围为 1～100", example = "20")
-            @RequestParam(defaultValue = "20") long size
+            @RequestParam(defaultValue = "20") long size,
+            @Parameter(
+                    description = "创建时间范围下限，使用 ISO-8601 UTC 格式",
+                    example = "2026-07-28T00:00:00Z"
+            )
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant createdAtStart
     ) {
         return ResponseEntity.ok(
-                alertService.getAlerts(status, severity, accountId, page, size)
+                alertService.getAlerts(
+                        status,
+                        severity,
+                        accountId,
+                        page,
+                        size,
+                        createdAtStart
+                )
         );
     }
 

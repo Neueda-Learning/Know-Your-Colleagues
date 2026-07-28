@@ -115,7 +115,8 @@ public class AlertServiceImpl implements AlertService {
             Severity severity,
             String accountId,
             long page,
-            long size
+            long size,
+            Instant createdAtStart
     ) {
         validatePage(page, size);
 
@@ -124,6 +125,8 @@ public class AlertServiceImpl implements AlertService {
                 .eq(severity != null, Alert::getSeverity, severity)
                 .eq(hasText(accountId), Alert::getAccountId,
                         hasText(accountId) ? accountId.trim() : null)
+                .ge(createdAtStart != null, Alert::getCreatedAt,
+                        createdAtStart)
                 .orderByDesc(Alert::getCreatedAt);
 
         // Controller 对外使用从 0 开始的页码，MyBatis-Plus Page 使用从 1 开始的页码。

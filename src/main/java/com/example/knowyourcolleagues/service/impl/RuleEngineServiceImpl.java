@@ -57,8 +57,6 @@ public class RuleEngineServiceImpl implements RuleEngineService {
                         .eq(Rule::getEnabled, Boolean.TRUE)
                         .orderByAsc(Rule::getId)
         );
-        List<Long> matchedRuleIds = new ArrayList<>();
-        List<Long> alertIds = new ArrayList<>();
         for (Rule rule : rules) {
             RuleEvaluationResult result = strategyRegistry
                     .get(rule.getType())

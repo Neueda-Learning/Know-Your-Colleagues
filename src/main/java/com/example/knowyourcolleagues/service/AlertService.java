@@ -9,6 +9,7 @@ import com.example.knowyourcolleagues.dto.UpdateAlertStatusRequest;
 import com.example.knowyourcolleagues.enums.AlertStatus;
 import com.example.knowyourcolleagues.enums.Severity;
 
+import java.time.Instant;
 import java.util.List;
 
 public interface AlertService {
@@ -22,7 +23,8 @@ public interface AlertService {
             Severity severity,
             String accountId,
             long page,
-            long size
+            long size,
+            Instant createdAtStart
     );
 
     AlertDetailResponse updateStatus(Long alertId, UpdateAlertStatusRequest request);

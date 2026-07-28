@@ -171,6 +171,8 @@ class AlertServiceImplTest {
     @SuppressWarnings("unchecked")
     void shouldQueryAlertsWithDatabasePagination() {
         Alert alert = openAlert();
+        Instant createdAtStart =
+                Instant.parse("2026-07-28T00:00:00Z");
         when(alertMapper.selectPage(any(Page.class), any(Wrapper.class)))
                 .thenAnswer(invocation -> {
                     Page<Alert> requestedPage = invocation.getArgument(0);
@@ -184,12 +186,16 @@ class AlertServiceImplTest {
                 Severity.HIGH,
                 "ACC-001",
                 1,
-                10
+                10,
+                createdAtStart
         );
 
         ArgumentCaptor<Page<Alert>> pageCaptor =
                 ArgumentCaptor.forClass(Page.class);
-        verify(alertMapper).selectPage(pageCaptor.capture(), any(Wrapper.class));
+        verify(alertMapper).selectPage(
+                pageCaptor.capture(),
+                any(Wrapper.class)
+        );
 
         // API 第 1 页对应 MyBatis-Plus 的第 2 页。
         assertThat(pageCaptor.getValue().getCurrent()).isEqualTo(2L);
