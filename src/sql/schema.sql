@@ -29,8 +29,8 @@ CREATE TABLE IF NOT EXISTS transactions (
         COMMENT 'ISO 4217 currency code',
     transaction_type VARCHAR(16) NOT NULL
         COMMENT 'DEBIT or CREDIT',
-    status VARCHAR(16) NOT NULL DEFAULT 'COMPLETED'
-        COMMENT 'PENDING, COMPLETED or FAILED',
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING'
+        COMMENT 'PENDING, NORMAL or ABNORMAL',
     description VARCHAR(500) NULL
         COMMENT 'Transaction description',
     transaction_time DATETIME(3) NOT NULL
@@ -54,11 +54,31 @@ CREATE TABLE IF NOT EXISTS transactions (
     CONSTRAINT chk_transactions_type
         CHECK (transaction_type IN ('DEBIT', 'CREDIT')),
     CONSTRAINT chk_transactions_status
-        CHECK (status IN ('PENDING', 'COMPLETED', 'FAILED'))
+        CHECK (status IN ('PENDING', 'NORMAL', 'ABNORMAL'))
 ) ENGINE = InnoDB
   DEFAULT CHARACTER SET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
   COMMENT = 'Transaction records';
+
+-- Migrate databases created with the former PENDING/COMPLETED/FAILED model.
+-- Dropping the old check first allows the legacy values to be converted.
+ALTER TABLE transactions
+    DROP CHECK chk_transactions_status;
+
+UPDATE transactions
+SET status = CASE status
+    WHEN 'COMPLETED' THEN 'NORMAL'
+    WHEN 'FAILED' THEN 'ABNORMAL'
+    ELSE status
+END
+WHERE status IN ('COMPLETED', 'FAILED');
+
+ALTER TABLE transactions
+    ALTER COLUMN status SET DEFAULT 'PENDING';
+
+ALTER TABLE transactions
+    ADD CONSTRAINT chk_transactions_status
+        CHECK (status IN ('PENDING', 'NORMAL', 'ABNORMAL'));
 
 -- ============================================================
 -- 2. Monitoring rules

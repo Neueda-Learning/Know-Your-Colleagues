@@ -43,7 +43,7 @@ public class TransactionQueryRequest {
     @Schema(description = "交易时间终点，包含边界", example = "2026-07-31T23:59:59")
     private LocalDateTime transactionTimeEnd;
 
-    @Schema(description = "交易状态", example = "COMPLETED")
+    @Schema(description = "交易状态", example = "NORMAL")
     private TransactionStatus status;
 
     @Min(0)

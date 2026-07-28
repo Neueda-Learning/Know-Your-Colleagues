@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -32,25 +33,31 @@ public class VelocityRuleStrategy implements RuleEvaluationStrategy {
     ) {
         LocalDateTime start = transaction.getTransactionTime()
                 .minusMinutes(rule.getTimeWindowMinutes());
-        List<Transaction> transactions = transactionMapper.selectList(
-                new LambdaQueryWrapper<Transaction>()
-                        .eq(Transaction::getAccountId,
-                                transaction.getAccountId())
-                        .eq(Transaction::getStatus,
-                                TransactionStatus.COMPLETED)
-                        .ge(Transaction::getTransactionTime, start)
-                        .le(Transaction::getTransactionTime,
-                                transaction.getTransactionTime())
-                        .orderByAsc(Transaction::getTransactionTime)
-                        .orderByAsc(Transaction::getId)
-        ).stream().filter(item -> isNotAfter(item, transaction)).toList();
+        List<Transaction> transactions = new ArrayList<>(
+                transactionMapper.selectList(
+                        new LambdaQueryWrapper<Transaction>()
+                                .eq(Transaction::getAccountId,
+                                        transaction.getAccountId())
+                                .in(Transaction::getStatus,
+                                        TransactionStatus.NORMAL,
+                                        TransactionStatus.ABNORMAL)
+                                .ge(Transaction::getTransactionTime, start)
+                                .le(Transaction::getTransactionTime,
+                                        transaction.getTransactionTime())
+                                .orderByAsc(Transaction::getTransactionTime)
+                                .orderByAsc(Transaction::getId)
+                ).stream()
+                        .filter(item -> isNotAfter(item, transaction))
+                        .toList()
+        );
+        transactions.add(transaction);
 
         if (transactions.size() != rule.getTransactionCount() + 1) {
             return RuleEvaluationResult.notMatched();
         }
         return RuleEvaluationResult.matched(
                 "Transaction velocity exceeded",
-                transactions.size() + " completed transactions occurred "
+                transactions.size() + " evaluated transactions occurred "
                         + "within " + rule.getTimeWindowMinutes()
                         + " minutes for account "
                         + transaction.getAccountId(),

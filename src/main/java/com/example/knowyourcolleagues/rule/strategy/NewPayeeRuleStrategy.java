@@ -35,8 +35,9 @@ public class NewPayeeRuleStrategy implements RuleEvaluationStrategy {
                                 transaction.getAccountId())
                         .eq(Transaction::getPayeeId,
                                 transaction.getPayeeId())
-                        .eq(Transaction::getStatus,
-                                TransactionStatus.COMPLETED)
+                        .in(Transaction::getStatus,
+                                TransactionStatus.NORMAL,
+                                TransactionStatus.ABNORMAL)
                         .and(wrapper -> wrapper
                                 .lt(Transaction::getTransactionTime,
                                         transaction.getTransactionTime())
@@ -52,7 +53,7 @@ public class NewPayeeRuleStrategy implements RuleEvaluationStrategy {
         return RuleEvaluationResult.matched(
                 "New payee detected",
                 "Account " + transaction.getAccountId()
-                        + " made its first completed transaction to payee "
+                        + " made its first evaluated transaction to payee "
                         + transaction.getPayeeId(),
                 List.of(transaction.getId())
         );
