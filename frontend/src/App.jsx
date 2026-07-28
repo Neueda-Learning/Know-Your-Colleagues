@@ -3,7 +3,7 @@ import Sidebar from "./components/Sidebar";
 import TransactionsPage from "./pages/TransactionsPage";
 import MonitoringRules from "./pages/MonitoringRules.jsx";
 import AlertsPage from "./pages/AlertsPage";
-import DashboardPage from "./pages/DashboardPage";
+import DashboardPage from "./pages/DashBoardPage";
 import { COLORS, NAV_ITEMS } from "./constants/theme";
 import "./App.css";
 
