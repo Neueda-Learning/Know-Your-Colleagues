@@ -30,6 +30,9 @@ Options:
 Examples:
   node scripts/mock-dashboard-scenario.mjs --count 20 --interval-ms 1500
   node scripts/mock-dashboard-scenario.mjs --continuous --interval-ms 2000
+
+Each ten-transaction cycle uses one account and mirrors the SQL demo dataset:
+nine rule-linked high-value/new-payee payments followed by one low-value repeat.
 `;
 
 function parseArguments(argv) {
@@ -135,116 +138,96 @@ function buildRuleContext(rules) {
   const velocityRule = findRule("VELOCITY");
   const newPayeeRule = findRule("NEW_PAYEE");
   const dailyLimitRule = findRule("DAILY_LIMIT");
-  const baselineCurrency = amountRule?.currency
+  const scenarioCurrency = amountRule?.currency
     ?? dailyLimitRule?.currency
     ?? "USD";
   const amountThreshold = Number(amountRule?.thresholdAmount ?? 10_000);
   const dailyLimit = Number(dailyLimitRule?.dailyLimitAmount ?? 50_000);
+  const ruleTriggerAmount = roundMoney(Math.max(
+    amountThreshold + 100,
+    dailyLimit / 4 + 100
+  ));
+  const normalAmount = roundMoney(Math.max(
+    1,
+    Math.min(100, amountThreshold / 10, dailyLimit / 100)
+  ));
+  const velocityCount = Number(velocityRule?.transactionCount ?? 5);
+  const currencyMatches = (rule) => !rule?.currency
+    || rule.currency.toUpperCase() === scenarioCurrency.toUpperCase();
+  const dailyCrossingPosition = dailyLimitRule
+    && currencyMatches(dailyLimitRule)
+    ? Math.floor(dailyLimit / ruleTriggerAmount) + 1
+    : null;
 
   return {
     amountRule,
     velocityRule,
     newPayeeRule,
     dailyLimitRule,
-    baselineCurrency,
-    baselineAmount: roundMoney(Math.min(100, amountThreshold * 0.1)),
-    highValueAmount: roundMoney(amountThreshold * 1.25 + 1),
-    velocityCount: Number(velocityRule?.transactionCount ?? 5),
-    velocityAmount: roundMoney(Math.min(25, amountThreshold * 0.02)),
-    dailyLimitAmount: roundMoney(dailyLimit * 1.05 + 1),
+    scenarioCurrency,
+    amountThreshold,
+    dailyLimit,
+    ruleTriggerAmount,
+    normalAmount,
+    velocityCount,
+    velocityTriggerPosition: velocityCount + 1,
+    dailyCrossingPosition,
+    currencyMatches,
   };
 }
 
 function createScenarioPlanner(context, runId, accountPrefix) {
-  const velocityTransactions = context.velocityCount + 1;
-  const cycleLength = 5 + velocityTransactions;
+  const cycleLength = 10;
 
   return (index) => {
-    const position = index % cycleLength;
+    const position = (index % cycleLength) + 1;
     const cycle = Math.floor(index / cycleLength) + 1;
-    const common = {
-      currency: context.baselineCurrency,
-      transactionType: "DEBIT",
-    };
+    const accountId = `${accountPrefix}-${runId}-${String(cycle).padStart(3, "0")}`;
+    const payeePrefix = `PAYEE-${runId}-${String(cycle).padStart(3, "0")}`;
+    const isRuleTriggerPayment = position <= 9;
+    const expectedRules = [];
 
-    if (position <= 1) {
-      return {
-        name: position === 0 ? "BASELINE_WARMUP" : "BASELINE_NORMAL",
-        expected: position === 0 && context.newPayeeRule
-          ? "ABNORMAL on first payee use; later cycles should be NORMAL"
-          : "NORMAL unless another active rule matches",
-        payload: {
-          ...common,
-          accountId: `${accountPrefix}-${runId}-BASE`,
-          payeeId: "PAYEE-KNOWN",
-          amount: context.baselineAmount,
-          description: `Dashboard demo baseline transaction, cycle ${cycle}`,
-        },
-      };
+    if (isRuleTriggerPayment
+        && context.amountRule
+        && context.currencyMatches(context.amountRule)
+        && context.ruleTriggerAmount > context.amountThreshold) {
+      expectedRules.push(context.amountRule.name);
+    }
+    if (isRuleTriggerPayment && context.newPayeeRule) {
+      expectedRules.push(context.newPayeeRule.name);
+    }
+    if (position === context.velocityTriggerPosition && context.velocityRule) {
+      expectedRules.push(context.velocityRule.name);
+    }
+    if (position === context.dailyCrossingPosition && context.dailyLimitRule) {
+      expectedRules.push(context.dailyLimitRule.name);
     }
 
-    if (position === 2) {
-      return {
-        name: "HIGH_VALUE",
-        expected: context.amountRule
-          ? `ABNORMAL: exceeds ${context.amountRule.name}`
-          : "Depends on active amount rules",
-        payload: {
-          ...common,
-          currency: context.amountRule?.currency ?? context.baselineCurrency,
-          accountId: `${accountPrefix}-${runId}-HIGH`,
-          payeeId: "PAYEE-HIGH-VALUE",
-          amount: context.highValueAmount,
-          description: `Dashboard demo high-value transaction, cycle ${cycle}`,
-        },
-      };
-    }
-
-    if (position === 3) {
-      return {
-        name: "NEW_PAYEE",
-        expected: context.newPayeeRule
-          ? `ABNORMAL: matches ${context.newPayeeRule.name}`
-          : "Depends on active new-payee rules",
-        payload: {
-          ...common,
-          accountId: `${accountPrefix}-${runId}-PAYEE`,
-          payeeId: `PAYEE-NEW-${runId}-${index}`,
-          amount: context.baselineAmount,
-          description: `Dashboard demo new-payee transaction, cycle ${cycle}`,
-        },
-      };
-    }
-
-    if (position < 4 + velocityTransactions) {
-      const burstPosition = position - 3;
-      return {
-        name: `VELOCITY_${burstPosition}_OF_${velocityTransactions}`,
-        expected: burstPosition === velocityTransactions && context.velocityRule
-          ? `ABNORMAL: matches ${context.velocityRule.name}`
-          : "NORMAL after the payee warmup unless another rule matches",
-        payload: {
-          ...common,
-          accountId: `${accountPrefix}-${runId}-VELOCITY-${cycle}`,
-          payeeId: "PAYEE-VELOCITY",
-          amount: context.velocityAmount,
-          description: `Dashboard demo velocity burst ${burstPosition}/${velocityTransactions}`,
-        },
-      };
-    }
+    const expected = expectedRules.length > 0
+      ? `ABNORMAL: matches ${expectedRules.join(", ")}`
+      : "NORMAL: known payee and no configured threshold crossing";
+    const name = expectedRules.length > 0
+      ? `RULE_LINKED_${position}_OF_${cycleLength}`
+      : "KNOWN_PAYEE_NORMAL";
 
     return {
-      name: "DAILY_LIMIT",
-      expected: context.dailyLimitRule
-        ? `ABNORMAL: crosses ${context.dailyLimitRule.name}`
-        : "Depends on active daily-limit rules",
+      name,
+      expected,
+      expectedRules,
       payload: {
-        ...common,
-        currency: context.dailyLimitRule?.currency ?? context.baselineCurrency,
-        accountId: `${accountPrefix}-${runId}-DAILY-${cycle}`,
-        payeeId: "PAYEE-DAILY-LIMIT",
-        amount: context.dailyLimitAmount,
-        description: `Dashboard demo daily-limit transaction, cycle ${cycle}`,
+        accountId,
+        payeeId: position === 10
+          ? `${payeePrefix}-01`
+          : `${payeePrefix}-${String(position).padStart(2, "0")}`,
+        amount: isRuleTriggerPayment
+          ? context.ruleTriggerAmount
+          : context.normalAmount,
+        currency: context.scenarioCurrency,
+        transactionType: "DEBIT",
+        transactionTime: new Date().toISOString().slice(0, 19),
+        description: isRuleTriggerPayment
+          ? `Dashboard rule-linked payment ${position} of 9, cycle ${cycle}`
+          : `Dashboard known-payee low-value payment, cycle ${cycle}`,
       },
     };
   };
@@ -296,10 +279,29 @@ async function trackBusinessFlow(baseUrl, created, scenario, startedAt, timeoutM
     const alertSummary = alerts.length === 0
       ? "no alerts"
       : alerts.map((alert) => `${alert.severity}:${alert.ruleName}`).join(", ");
+    const actualRuleNames = new Set(alerts.map((alert) => alert.ruleName));
+    const missingExpectedRules = scenario.expectedRules.filter(
+      (ruleName) => !actualRuleNames.has(ruleName)
+    );
+    const expectedStatus = scenario.expectedRules.length > 0
+      ? "ABNORMAL"
+      : "NORMAL";
     console.log(
       `[FLOW] ${created.transactionRef} PENDING -> ${finalTransaction.status}`
       + ` | ${scenario.name} | ${alertSummary}`
     );
+    if (finalTransaction.status !== expectedStatus) {
+      console.warn(
+        `[FLOW CHECK] ${created.transactionRef} expected status `
+        + `${expectedStatus}, received ${finalTransaction.status}`
+      );
+    }
+    if (missingExpectedRules.length > 0) {
+      console.warn(
+        `[FLOW CHECK] ${created.transactionRef} missing expected alert(s): `
+        + missingExpectedRules.join(", ")
+      );
+    }
     return finalTransaction;
   } catch (error) {
     console.error(`[FLOW ERROR] transaction=${created.id} ${error.message}`);
@@ -380,10 +382,23 @@ function printRuleSummary(rules, context) {
           : "first account/payee combination";
     console.log(`  - ${rule.type}: ${rule.name} (${parameter})`);
   }
-  if (!context.amountRule) console.warn("[RULES] No enabled AMOUNT_THRESHOLD rule; HIGH_VALUE may remain NORMAL");
-  if (!context.velocityRule) console.warn("[RULES] No enabled VELOCITY rule; velocity burst may remain NORMAL");
-  if (!context.newPayeeRule) console.warn("[RULES] No enabled NEW_PAYEE rule; new-payee scenarios may remain NORMAL");
-  if (!context.dailyLimitRule) console.warn("[RULES] No enabled DAILY_LIMIT rule; daily-limit scenario may remain NORMAL");
+  console.log(
+    `[PLAN] cycle=10 currency=${context.scenarioCurrency}`
+    + ` triggerAmount=${context.ruleTriggerAmount}`
+    + ` normalAmount=${context.normalAmount}`
+    + ` velocityPosition=${context.velocityTriggerPosition}`
+    + ` dailyPosition=${context.dailyCrossingPosition ?? "none"}`
+  );
+  if (!context.amountRule) console.warn("[RULES] No enabled AMOUNT_THRESHOLD rule; amount alerts are not expected");
+  if (!context.velocityRule) console.warn("[RULES] No enabled VELOCITY rule; velocity alerts are not expected");
+  if (!context.newPayeeRule) console.warn("[RULES] No enabled NEW_PAYEE rule; new-payee alerts are not expected");
+  if (!context.dailyLimitRule) console.warn("[RULES] No enabled DAILY_LIMIT rule; daily-limit alerts are not expected");
+  if (context.velocityTriggerPosition > 10) {
+    console.warn("[RULES] VELOCITY requires more than one ten-transaction cycle and will not match this account plan");
+  }
+  if (context.dailyLimitRule && context.dailyCrossingPosition > 9) {
+    console.warn("[RULES] DAILY_LIMIT is not crossed by the nine rule-linked payments");
+  }
 }
 
 async function main() {
@@ -458,7 +473,7 @@ async function main() {
         }
       }
 
-      if (index + 1 < options.count && !stopped) {
+      if (!options.dryRun && index + 1 < options.count && !stopped) {
         await sleep(options.intervalMs);
       }
     }

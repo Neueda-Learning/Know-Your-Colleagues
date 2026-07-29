@@ -58,31 +58,29 @@ node scripts/mock-dashboard-scenario.mjs \
 
 ## 场景构成
 
-脚本启动时会调用`GET /api/rules?enabled=true`读取当前规则并动态计算交易参数。
+脚本启动时会调用`GET /api/rules?enabled=true`读取当前规则并动态计算交易参数。每10笔交易构成一个完整账户场景，与两个SQL模拟脚本使用相同的数据关系：前9笔为高金额且使用不同Payee，第10笔复用第1个Payee并使用低金额。
 
-| 场景 | 交易特点 | 预期业务结果 |
+| 场景位置 | 交易特点 | 预期业务结果 |
 | --- | --- | --- |
-| `BASELINE_WARMUP` | 低金额、固定账户和收款人 | 如果启用了New Payee，首次交易会产生告警 |
-| `BASELINE_NORMAL` | 重复使用相同账户和收款人 | 通常更新为NORMAL |
-| `HIGH_VALUE` | 金额高于当前Amount Threshold | 产生高额交易告警并更新为ABNORMAL |
-| `NEW_PAYEE` | 每次使用不同收款人 | 产生New Payee告警并更新为ABNORMAL |
-| `VELOCITY_*` | 连续创建`transactionCount + 1`笔同账户交易 | 最后一笔产生Velocity告警 |
-| `DAILY_LIMIT` | 借记金额跨过当前Daily Limit | 产生Daily Limit告警 |
+| 第1-9笔 | 金额根据Amount Threshold和Daily Limit动态计算，每笔使用新的Payee | 命中已启用的Amount Threshold和New Payee规则 |
+| `transactionCount + 1`位置 | 同一账户在规则时间窗口内连续交易 | 额外命中Velocity规则 |
+| 首次累计金额越过Daily Limit的位置 | 同一账户、币种和UTC日期内的DEBIT累计金额首次超限 | 额外命中Daily Limit规则，并关联参与累计的交易 |
+| 第10笔 | 低金额并复用第1笔的Payee | 默认规则下不命中规则，最终状态为NORMAL |
 
-如果某种规则未启用，脚本仍会创建对应交易，但会提示该场景的最终状态取决于其他启用规则。
+脚本会输出每轮使用的币种、触发金额、正常金额以及Velocity和Daily Limit的预期触发位置。如果实际状态或告警缺少预期规则，终端会输出`FLOW CHECK`提示。
 
 ## 终端输出
 
 `CREATE`表示API成功创建PENDING交易：
 
 ```text
-[CREATE 3] HIGH_VALUE -> id=301 ref=TXN-... amount=12501 USD status=PENDING
+[CREATE 3] RULE_LINKED_3_OF_10 -> id=301 ref=TXN-... amount=12600 USD status=PENDING
 ```
 
 `FLOW`表示RabbitMQ规则评估和数据库状态更新已经完成：
 
 ```text
-[FLOW] TXN-... PENDING -> ABNORMAL | HIGH_VALUE | HIGH:High-value transaction
+[FLOW] TXN-... PENDING -> ABNORMAL | RULE_LINKED_3_OF_10 | HIGH:High-value transaction, LOW:New payee detected
 ```
 
 `DASHBOARD`表示脚本从`/ws/dashboard`收到页面数据更新：
